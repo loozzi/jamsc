@@ -18,6 +18,11 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST'],
   },
+  transports: ['polling'],   // Polling only — works on Vercel serverless
+  pingTimeout: 60000,         // 60s before considering connection dead
+  pingInterval: 25000,        // Ping every 25s
+  upgradeTimeout: 10000,
+  allowEIO3: true,            // Backwards compatibility
 });
 
 // Serve static files from public directory

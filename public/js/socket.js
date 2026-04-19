@@ -14,10 +14,13 @@ const SocketClient = (() => {
     if (socket && socket.connected) return socket;
 
     socket = io({
+      transports: ['polling'],    // Polling only — Vercel doesn't support WebSocket
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000,
+      timeout: 30000,             // 30s connection timeout
+      forceNew: false,
     });
 
     socket.on('connect', () => {

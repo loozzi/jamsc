@@ -313,11 +313,12 @@ const App = (() => {
 
     SocketClient.on('sync:heartbeat', (state) => {
       if (!state || !state.currentTrack) return;
-      // Only re-sync if drift > 2 seconds
+      // Only re-sync if drift is between 2-30 seconds
+      // Drift > 30s means server likely lost state (cold start), ignore it
       Player.getCurrentTime().then((localTime) => {
         const serverTime = state.currentTime;
         const drift = Math.abs(localTime - serverTime);
-        if (drift > 2 && state.isPlaying) {
+        if (drift > 2 && drift < 30 && state.isPlaying) {
           console.log(`[Sync] Drift detected: ${drift.toFixed(1)}s, re-syncing...`);
           Player.seekTo(serverTime);
         }
