@@ -257,12 +257,14 @@ const App = (() => {
     // Sync events
     SocketClient.on('sync:state', (state) => {
       syncState = state;
+      state._receivedAt = Date.now();
       applyPlaybackState(state);
     });
 
     SocketClient.on('sync:track-changed', ({ track, playback }) => {
       if (playback) {
         syncState = playback;
+        playback._receivedAt = Date.now();
         applyPlaybackState(playback);
       }
     });
@@ -270,9 +272,10 @@ const App = (() => {
     SocketClient.on('sync:heartbeat', (state) => {
       if (!state || !state.currentTrack) return;
       if (isLoadingTrack) return; // Don't correct drift while track is loading
+      const receivedAt = Date.now();
       Player.getCurrentTime().then((localTime) => {
-        const networkElapsed = (Date.now() - state.lastSyncAt) / 1000;
-        const serverTime = state.currentTime + networkElapsed;
+        const elapsed = (Date.now() - receivedAt) / 1000;
+        const serverTime = state.currentTime + elapsed;
         const drift = Math.abs(localTime - serverTime);
         if (drift > 2 && drift < 30 && state.isPlaying) {
           console.log(`[Sync] Drift detected: ${drift.toFixed(1)}s, re-syncing...`);
@@ -369,9 +372,10 @@ const App = (() => {
       } else {
         // Sync to server position before resuming
         try {
+          const receivedAt = Date.now();
           const response = await SocketClient.emit('sync:request-state');
           if (response.success && response.playback && response.playback.isPlaying) {
-            const elapsed = (Date.now() - response.playback.lastSyncAt) / 1000;
+            const elapsed = (Date.now() - receivedAt) / 1000;
             Player.seekTo(response.playback.currentTime + elapsed);
           }
         } catch (_) {
@@ -389,7 +393,8 @@ const App = (() => {
 
     const doSeekAndPlay = (s) => {
       if (s.isPlaying) {
-        const elapsed = (Date.now() - s.lastSyncAt) / 1000;
+        const refTime = s._receivedAt || Date.now();
+        const elapsed = (Date.now() - refTime) / 1000;
         Player.seekTo(s.currentTime + elapsed);
         Player.play();
       } else {
