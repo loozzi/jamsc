@@ -11,21 +11,23 @@ const App = (() => {
   // ─── Initialize ───────────────────────────
 
   function init() {
-    // Start particles background
     UI.initParticles();
-
-    // Initialize SoundCloud widget
     Player.initSoundCloud();
-
-    // Connect socket
     SocketClient.connect();
 
-    // Bind UI events
     bindLandingEvents();
     bindRoomEvents();
     bindPlayerEvents();
     bindSocketEvents();
     bindChatEvents();
+
+    // Auto-fill room code if opened via shared link
+    const roomParam = new URLSearchParams(window.location.search).get('room');
+    if (roomParam) {
+      const codeInput = document.getElementById('input-room-code');
+      if (codeInput) codeInput.value = roomParam.toUpperCase();
+      UI.showView('view-join');
+    }
 
     console.log('[App] JAMSC initialized');
   }
@@ -64,6 +66,7 @@ const App = (() => {
           currentRoomCode = response.room.id;
           Room.setRoom(response.room);
           Queue.setQueue({ tracks: [], currentIndex: -1 });
+          history.pushState(null, '', '?room=' + response.room.id);
           UI.showView('view-room');
           UI.showToast(`Phòng ${response.room.id} đã được tạo!`, 'success');
         }
@@ -89,16 +92,13 @@ const App = (() => {
           currentRoomCode = response.room.id;
           Room.setRoom(response.room);
 
-          // Set queue
-          if (response.queue) {
-            Queue.setQueue(response.queue);
-          }
+          if (response.queue) Queue.setQueue(response.queue);
 
-          // Apply playback state
           if (response.playback && response.playback.currentTrack) {
             applyPlaybackState(response.playback);
           }
 
+          history.pushState(null, '', '?room=' + response.room.id);
           UI.showView('view-room');
           UI.showToast(`Đã tham gia phòng ${code}!`, 'success');
         }
@@ -111,12 +111,13 @@ const App = (() => {
   // ─── Room Events ──────────────────────────
 
   function bindRoomEvents() {
-    // Copy room code
+    // Copy invite link
     document.getElementById('btn-copy-code').addEventListener('click', async () => {
       if (!currentRoomCode) return;
-      const success = await UI.copyToClipboard(currentRoomCode);
+      const inviteUrl = window.location.origin + '?room=' + currentRoomCode;
+      const success = await UI.copyToClipboard(inviteUrl);
       if (success) {
-        UI.showToast('Đã sao chép mã phòng!', 'success');
+        UI.showToast('Đã sao chép link mời!', 'success');
       }
     });
 
@@ -547,6 +548,7 @@ const App = (() => {
   function leaveRoom() {
     currentRoomCode = null;
     syncState = null;
+    history.pushState(null, '', '/');
 
     // Disconnect and reconnect
     const socket = SocketClient.getSocket();
