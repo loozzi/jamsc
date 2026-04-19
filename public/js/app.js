@@ -6,6 +6,7 @@
 const App = (() => {
   let currentRoomCode = null;
   let syncState = null;
+  let isSyncingState = false;
 
   // ─── Initialize ───────────────────────────
 
@@ -228,8 +229,8 @@ const App = (() => {
 
     // Player callbacks
     Player.onStateChange((state) => {
-      // Only host should send state changes
       if (!Room.getIsHost()) return;
+      if (isSyncingState) return; // Ignore events triggered by applyPlaybackState
 
       if (state === 'playing') {
         Player.getCurrentTime().then((time) => {
@@ -304,19 +305,19 @@ const App = (() => {
       Player.loadTrack(track);
       updateNowPlaying(track);
 
-      // Apply playback state
       if (playback) {
         syncState = playback;
-        setTimeout(() => applyPlaybackState(playback), 1000);
+        applyPlaybackState(playback);
       }
     });
 
     SocketClient.on('sync:heartbeat', (state) => {
       if (!state || !state.currentTrack) return;
-      // Only re-sync if drift is between 2-30 seconds
-      // Drift > 30s means server likely lost state (cold start), ignore it
+      if (isSyncingState) return;
       Player.getCurrentTime().then((localTime) => {
-        const serverTime = state.currentTime;
+        // Compensate for network latency when comparing positions
+        const networkElapsed = (Date.now() - state.lastSyncAt) / 1000;
+        const serverTime = state.currentTime + networkElapsed;
         const drift = Math.abs(localTime - serverTime);
         if (drift > 2 && drift < 30 && state.isPlaying) {
           console.log(`[Sync] Drift detected: ${drift.toFixed(1)}s, re-syncing...`);
@@ -413,34 +414,38 @@ const App = (() => {
   function applyPlaybackState(state) {
     if (!state) return;
 
+    let trackChanged = false;
     if (state.currentTrack) {
-      // Check if we need to load a different track
-      const currentSrc = Player.getSource();
       const playing = Queue.getCurrentTrack();
-
       if (!playing || playing.id !== state.currentTrack.id) {
+        trackChanged = true;
         Player.loadTrack(state.currentTrack);
         updateNowPlaying(state.currentTrack);
-
-        // Update queue
         const tracks = Queue.getTracks();
         const idx = tracks.findIndex((t) => t.id === state.currentTrack.id);
-        if (idx !== -1) {
-          Queue.setCurrentIndex(idx);
-        }
+        if (idx !== -1) Queue.setCurrentIndex(idx);
       }
     }
 
-    if (state.isPlaying) {
-      // Calculate where we should be based on server time
-      const elapsed = (Date.now() - state.lastSyncAt) / 1000;
-      const targetTime = state.currentTime + elapsed;
+    const seekAndPlay = () => {
+      isSyncingState = true;
+      if (state.isPlaying) {
+        const elapsed = (Date.now() - state.lastSyncAt) / 1000;
+        const targetTime = state.currentTime + elapsed;
+        Player.seekTo(targetTime);
+        Player.play();
+      } else {
+        Player.seekTo(state.currentTime);
+        Player.pause();
+      }
+      setTimeout(() => { isSyncingState = false; }, 1500);
+    };
 
-      Player.seekTo(targetTime);
-      Player.play();
+    // When track just loaded, wait for the player to initialize before seeking/playing
+    if (trackChanged) {
+      setTimeout(seekAndPlay, 1500);
     } else {
-      Player.seekTo(state.currentTime);
-      Player.pause();
+      seekAndPlay();
     }
   }
 
