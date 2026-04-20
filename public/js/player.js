@@ -180,6 +180,14 @@ const Player = (() => {
   function loadTrack(track) {
     stopProgressTracking();
 
+    if (track.source !== 'youtube') {
+      const fs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fs && fs.id === 'youtube-player-container') {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document).catch(() => {});
+      }
+    }
+
     // Stop currently playing source before loading new track
     isExternalUpdate = true;
     if (currentSource === 'youtube' && ytPlayer && isReady.youtube) {
@@ -327,6 +335,13 @@ const Player = (() => {
         resolve(0);
       }
     });
+  }
+
+  /**
+   * Last known duration in seconds (synchronous; may be 0 before widget reports length)
+   */
+  function getCachedDuration() {
+    return duration > 0 ? duration : 0;
   }
 
   /**
@@ -483,6 +498,7 @@ const Player = (() => {
     pause,
     seekTo,
     getCurrentTime,
+    getCachedDuration,
     getDuration,
     setVolume,
     onStateChange,

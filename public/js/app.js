@@ -8,10 +8,99 @@ const App = (() => {
   let loadedTrackId = null;    // ID of the track currently loaded in the player
   let isLoadingTrack = false;  // True during the window after loadTrack is called
   let pendingSeekState = null; // Latest state to apply once loading completes
+  let progressScrubPointerId = null; // Active pointer on custom progress bar (host scrub)
+  let progressScrubLastClientX = 0;
+
+  const PLAYER_WIDTH_STORAGE_KEY = 'jamsc-player-width';
+
+  function clampPlayerWidth(px) {
+    const wrap = document.getElementById('player-wrapper');
+    const parent = wrap?.parentElement;
+    const avail = parent ? Math.max(0, parent.clientWidth) : Math.max(0, window.innerWidth - 24);
+    const maxW = Math.min(avail, 1600);
+    const minW = 260;
+    return Math.round(Math.min(maxW, Math.max(minW, px)));
+  }
+
+  function applyStoredPlayerWidth() {
+    const wrap = document.getElementById('player-wrapper');
+    if (!wrap) return;
+    try {
+      const raw = localStorage.getItem(PLAYER_WIDTH_STORAGE_KEY);
+      if (!raw) return;
+      const w = parseInt(raw, 10);
+      if (!Number.isFinite(w)) return;
+      wrap.style.setProperty('--player-custom-width', `${clampPlayerWidth(w)}px`);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  function bindPlayerResize() {
+    const handle = document.getElementById('player-resize-handle');
+    const wrap = document.getElementById('player-wrapper');
+    if (!handle || !wrap) return;
+
+    let active = false;
+    let startX = 0;
+    let startW = 0;
+    let ptrId = null;
+
+    function endDrag(e) {
+      if (!active || e.pointerId !== ptrId) return;
+      active = false;
+      ptrId = null;
+      document.body.classList.remove('player-resize-active');
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // ignore
+      }
+
+      const w = Math.round(wrap.getBoundingClientRect().width);
+      try {
+        localStorage.setItem(PLAYER_WIDTH_STORAGE_KEY, String(clampPlayerWidth(w)));
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      active = true;
+      ptrId = e.pointerId;
+      startX = e.clientX;
+      startW = wrap.getBoundingClientRect().width;
+      document.body.classList.add('player-resize-active');
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (_) {
+        // ignore
+      }
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+      if (!active || e.pointerId !== ptrId) return;
+      const dx = e.clientX - startX;
+      const next = clampPlayerWidth(startW + dx);
+      wrap.style.setProperty('--player-custom-width', `${next}px`);
+    });
+
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+
+    window.addEventListener('resize', () => {
+      const rect = wrap.getBoundingClientRect();
+      wrap.style.setProperty('--player-custom-width', `${clampPlayerWidth(rect.width)}px`);
+    });
+  }
 
   // ─── Initialize ───────────────────────────
 
   function init() {
+    applyStoredPlayerWidth();
+
     UI.initParticles();
     Player.initSoundCloud();
     Player.initMediaSession();
@@ -176,6 +265,97 @@ const App = (() => {
 
   // ─── Player Events ────────────────────────
 
+  /**
+   * Host: click / drag on the custom progress bar → SoundCloud/YouTube seek + sync:seek
+   */
+  function bindProgressScrub() {
+    const bar = document.getElementById('progress-bar');
+    if (!bar) return;
+
+    const ratioFromClientX = (clientX) => {
+      const rect = bar.getBoundingClientRect();
+      if (rect.width <= 0) return 0;
+      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    };
+
+    const updateScrubVisual = (clientX) => {
+      const dur = Player.getCachedDuration();
+      if (dur <= 0) return;
+      Player.updateProgressUI(ratioFromClientX(clientX) * dur, dur);
+    };
+
+    const endScrub = (e, cancelled) => {
+      if (progressScrubPointerId === null || e.pointerId !== progressScrubPointerId) return;
+
+      const pid = progressScrubPointerId;
+      progressScrubPointerId = null;
+      progressScrubLastClientX = e.clientX;
+      bar.classList.remove('is-scrubbing');
+
+      try {
+        if (bar.hasPointerCapture(pid)) {
+          bar.releasePointerCapture(pid);
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      if (cancelled || !Room.getIsHost()) {
+        Player.getCurrentTime().then((ct) => {
+          Player.getDuration().then((d) => Player.updateProgressUI(ct, d));
+        });
+        return;
+      }
+
+      Player.getDuration().then((dur) => {
+        if (dur <= 0) return;
+        const t = ratioFromClientX(progressScrubLastClientX) * dur;
+        Player.seekTo(t);
+        Player.updateProgressUI(t, dur);
+        SocketClient.emit('sync:seek', { time: t }).catch((err) => {
+          UI.showToast(err.message || 'Không thể tua', 'error');
+        });
+      });
+    };
+
+    bar.addEventListener('pointerdown', (e) => {
+      if (bar.classList.contains('disabled')) return;
+      if (!Room.getIsHost()) return;
+      if (e.button !== 0) return;
+      if (!Queue.getCurrentTrack()) {
+        UI.showToast('Chưa có bài để tua', 'info');
+        return;
+      }
+
+      e.preventDefault();
+      progressScrubPointerId = e.pointerId;
+      progressScrubLastClientX = e.clientX;
+      bar.classList.add('is-scrubbing');
+
+      try {
+        bar.setPointerCapture(e.pointerId);
+      } catch (_) {
+        // ignore
+      }
+
+      updateScrubVisual(e.clientX);
+    });
+
+    bar.addEventListener('pointermove', (e) => {
+      if (progressScrubPointerId === null || e.pointerId !== progressScrubPointerId) return;
+      progressScrubLastClientX = e.clientX;
+      updateScrubVisual(e.clientX);
+    });
+
+    bar.addEventListener('pointerup', (e) => {
+      endScrub(e, false);
+    });
+
+    bar.addEventListener('pointercancel', (e) => {
+      endScrub(e, true);
+    });
+  }
+
   function bindPlayerEvents() {
     // Play/Pause button (host = broadcast, member = local)
     document.getElementById('btn-play').addEventListener('click', () => {
@@ -223,6 +403,57 @@ const App = (() => {
         // Ignore if not allowed
       }
     });
+
+    bindProgressScrub();
+    bindYoutubeFullscreen();
+    bindPlayerResize();
+  }
+
+  function bindYoutubeFullscreen() {
+    const btn = document.getElementById('btn-player-expand');
+    const ytContainer = document.getElementById('youtube-player-container');
+    const iconExpand = document.getElementById('icon-player-expand');
+    const iconCompress = document.getElementById('icon-player-compress');
+
+    if (!btn || !ytContainer) return;
+
+    function refreshFullscreenIcons() {
+      const fs = document.fullscreenElement || document.webkitFullscreenElement;
+      const active = fs === ytContainer;
+      if (iconExpand && iconCompress) {
+        iconExpand.style.display = active ? 'none' : 'block';
+        iconCompress.style.display = active ? 'block' : 'none';
+      }
+      btn.title = active ? 'Thoát toàn màn hình' : 'Toàn màn hình (video)';
+      btn.setAttribute('aria-label', btn.title);
+    }
+
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const fs = document.fullscreenElement || document.webkitFullscreenElement;
+        if (!fs) {
+          if (ytContainer.requestFullscreen) {
+            await ytContainer.requestFullscreen();
+          } else if (ytContainer.webkitRequestFullscreen) {
+            ytContainer.webkitRequestFullscreen();
+          }
+        } else if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      } catch (err) {
+        UI.showToast('Không thể bật toàn màn hình trên trình duyệt này', 'error');
+      }
+      refreshFullscreenIcons();
+    });
+
+    document.addEventListener('fullscreenchange', refreshFullscreenIcons);
+    document.addEventListener('webkitfullscreenchange', refreshFullscreenIcons);
+
+    refreshFullscreenIcons();
   }
 
   // ─── Socket Events ────────────────────────
@@ -454,6 +685,8 @@ const App = (() => {
     if (!track) {
       emptyEl.style.display = 'block';
       infoEl.style.display = 'none';
+      const expandBtn = document.getElementById('btn-player-expand');
+      if (expandBtn) expandBtn.hidden = true;
       return;
     }
 
@@ -474,6 +707,11 @@ const App = (() => {
     title.textContent = track.title || 'Loading...';
     source.textContent = track.source === 'youtube' ? 'YouTube' : 'SoundCloud';
     added.textContent = `Thêm bởi ${track.addedBy || 'Unknown'}`;
+
+    const expandBtn = document.getElementById('btn-player-expand');
+    if (expandBtn) {
+      expandBtn.hidden = track.source !== 'youtube';
+    }
 
     // Update Media Session metadata for lock screen / OS notification
     Player.updateMediaSession(track);
@@ -639,6 +877,14 @@ const App = (() => {
     document.getElementById('progress-fill').style.width = '0%';
     document.getElementById('time-current').textContent = '0:00';
     document.getElementById('time-duration').textContent = '0:00';
+
+    const expandBtn = document.getElementById('btn-player-expand');
+    if (expandBtn) expandBtn.hidden = true;
+    const fs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fs && fs.id === 'youtube-player-container') {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document).catch(() => {});
+    }
   }
 
   // ─── Reconnect Handler ────────────────────

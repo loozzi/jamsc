@@ -138,6 +138,7 @@ const Room = (() => {
   function updateControlPermissions() {
     const btnPlay = document.getElementById('btn-play');
     const btnNext = document.getElementById('btn-next');
+    const progressBar = document.getElementById('progress-bar');
 
     if (btnPlay) btnPlay.classList.remove('disabled');
 
@@ -147,6 +148,14 @@ const Room = (() => {
         btnNext.classList.remove('disabled');
       } else {
         btnNext.classList.add('disabled');
+      }
+    }
+
+    if (progressBar) {
+      if (isHost) {
+        progressBar.classList.remove('disabled');
+      } else {
+        progressBar.classList.add('disabled');
       }
     }
   }

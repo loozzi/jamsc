@@ -575,6 +575,41 @@ io.on('connection', (socket) => {
   });
 
   /**
+   * Seek to a time position (seconds) — host only
+   */
+  socket.on('sync:seek', ({ time }, callback) => {
+    const roomCode = roomManager.getRoomBySocket(socket.id);
+    if (!roomCode) return callback?.({ success: false, error: 'Không trong phòng nào' });
+
+    const room = roomManager.getRoom(roomCode);
+    if (room.hostId !== socket.id) {
+      return callback?.({ success: false, error: 'Chỉ host' });
+    }
+
+    const t = Number(time);
+    if (!Number.isFinite(t)) {
+      return callback?.({ success: false, error: 'Thời gian không hợp lệ' });
+    }
+
+    const before = syncManager.getPlaybackState(roomCode);
+    if (!before || !before.currentTrack) {
+      return callback?.({ success: false, error: 'Chưa có bài để tua' });
+    }
+
+    let clamped = Math.max(0, t);
+    const dur = before.currentTrack.duration;
+    if (dur > 0 && clamped > dur) {
+      clamped = dur;
+    }
+
+    const state = syncManager.seek(roomCode, clamped);
+    if (!state) return callback?.({ success: false, error: 'Không thể tua' });
+
+    io.to(roomCode).emit('sync:state', state);
+    callback?.({ success: true });
+  });
+
+  /**
    * Track ended - remove played track and advance to next
    */
   socket.on('sync:track-ended', (_, callback) => {
@@ -624,6 +659,9 @@ io.on('connection', (socket) => {
       syncManager.setTrack(roomCode, nextTrack);
       const playState = syncManager.play(roomCode);
       io.to(roomCode).emit('sync:track-changed', { track: nextTrack, playback: playState });
+    } else {
+      const state = syncManager.pause(roomCode);
+      io.to(roomCode).emit('sync:queue-ended', state);
     }
     callback?.({ success: true });
   });
