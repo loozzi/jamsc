@@ -10,11 +10,70 @@ const Player = (() => {
   let isExternalUpdate = false; // Prevent feedback loops
   let onStateChangeCallback = null;
   let onTrackEndCallback = null;
+  let onNextTrackCallback = null; // For Media Session nexttrack action
   let progressInterval = null;
   let duration = 0;
   let isReady = { youtube: false, soundcloud: false };
   let volume = 70;
   let pendingTrack = null; // Track to load once player is ready
+
+  // ─── Media Session API ────────────────────
+
+  function initMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      play();
+      if (onStateChangeCallback) onStateChangeCallback('playing');
+    });
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      pause();
+      if (onStateChangeCallback) onStateChangeCallback('paused');
+    });
+
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      if (onNextTrackCallback) onNextTrackCallback();
+    });
+
+    navigator.mediaSession.setActionHandler('stop', () => {
+      pause();
+    });
+  }
+
+  /**
+   * Update Media Session metadata (shown on lock screen / notification)
+   */
+  function updateMediaSession(track) {
+    if (!('mediaSession' in navigator)) return;
+
+    const artwork = [];
+    if (track.thumbnail) {
+      artwork.push({ src: track.thumbnail, sizes: '256x256', type: 'image/jpeg' });
+    }
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || 'Đang tải...',
+      artist: track.addedBy ? `Thêm bởi ${track.addedBy}` : 'JAMSC',
+      album: track.source === 'youtube' ? 'YouTube' : 'SoundCloud',
+      artwork,
+    });
+  }
+
+  /**
+   * Update Media Session playback state
+   */
+  function setMediaSessionPlaybackState(state) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = state; // 'playing' | 'paused' | 'none'
+  }
+
+  /**
+   * Register callback for next track (triggered from lock screen)
+   */
+  function onNextTrack(cb) {
+    onNextTrackCallback = cb;
+  }
 
   // ─── YouTube Player ───────────────────────
 
@@ -221,6 +280,7 @@ const Player = (() => {
     startProgressTracking();
     setTimeout(() => { isExternalUpdate = false; }, 300);
     updatePlayButton(true);
+    setMediaSessionPlaybackState('playing');
   }
 
   /**
@@ -236,6 +296,7 @@ const Player = (() => {
     stopProgressTracking();
     setTimeout(() => { isExternalUpdate = false; }, 300);
     updatePlayButton(false);
+    setMediaSessionPlaybackState('paused');
   }
 
   /**
@@ -416,6 +477,7 @@ const Player = (() => {
   return {
     initYouTube,
     initSoundCloud,
+    initMediaSession,
     loadTrack,
     play,
     pause,
@@ -425,6 +487,8 @@ const Player = (() => {
     setVolume,
     onStateChange,
     onTrackEnd,
+    onNextTrack,
+    updateMediaSession,
     updatePlayButton,
     updateProgressUI,
     getYouTubeTitle,

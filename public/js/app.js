@@ -14,6 +14,7 @@ const App = (() => {
   function init() {
     UI.initParticles();
     Player.initSoundCloud();
+    Player.initMediaSession();
     SocketClient.connect();
 
     bindLandingEvents();
@@ -211,6 +212,15 @@ const App = (() => {
     Player.onTrackEnd(() => {
       if (Room.getIsHost()) {
         SocketClient.emit('sync:track-ended');
+      }
+    });
+
+    // Allow next track from lock screen / media notification
+    Player.onNextTrack(async () => {
+      try {
+        await SocketClient.emit('sync:next');
+      } catch (err) {
+        // Ignore if not allowed
       }
     });
   }
@@ -465,6 +475,9 @@ const App = (() => {
     source.textContent = track.source === 'youtube' ? 'YouTube' : 'SoundCloud';
     added.textContent = `Thêm bởi ${track.addedBy || 'Unknown'}`;
 
+    // Update Media Session metadata for lock screen / OS notification
+    Player.updateMediaSession(track);
+
     // If YouTube, try to get title after loading
     if (track.source === 'youtube' && !track.title) {
       setTimeout(async () => {
@@ -472,6 +485,8 @@ const App = (() => {
         if (ytTitle) {
           title.textContent = ytTitle;
           Queue.updateTrackTitle(track.id, ytTitle);
+          // Re-update Media Session with the real title
+          Player.updateMediaSession({ ...track, title: ytTitle });
         }
       }, 2000);
     }
