@@ -10,6 +10,7 @@ const path = require('path');
 const roomManager = require('./roomManager');
 const queueManager = require('./queueManager');
 const syncManager = require('./syncManager');
+const youtubeSearch = require('./youtubeSearch');
 
 const app = express();
 const server = http.createServer(app);
@@ -65,6 +66,38 @@ app.get('/api/resolve', async (req, res) => {
   } catch (err) {
     console.error('Resolve error:', err);
     res.status(500).json({ error: 'Không thể xử lý URL này' });
+  }
+});
+
+/**
+ * YouTube keyword search — first result (scrape, no Data API). Experimental.
+ */
+app.get('/api/youtube-search-first', async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!q) {
+    return res.status(400).json({ error: 'Nhập từ khóa tìm kiếm.' });
+  }
+
+  try {
+    const track = await youtubeSearch.searchYouTubeFirstVideo(q);
+    if (!track) {
+      return res.status(404).json({ error: 'Không tìm thấy video phù hợp. Thử từ khóa khác.' });
+    }
+    if (!track.title && track.url) {
+      try {
+        const enriched = await resolveUrl(track.url);
+        if (enriched) {
+          if (enriched.title) track.title = enriched.title;
+          if (enriched.thumbnail) track.thumbnail = enriched.thumbnail;
+        }
+      } catch (_) {
+        /* keep scrape-only metadata */
+      }
+    }
+    res.json({ track });
+  } catch (err) {
+    console.error('YouTube search error:', err);
+    res.status(500).json({ error: 'Không thể tìm kiếm lúc này. Thử lại sau.' });
   }
 });
 

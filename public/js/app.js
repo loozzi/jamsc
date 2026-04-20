@@ -160,6 +160,17 @@ const App = (() => {
       await addTrack(url);
       input.value = '';
     });
+
+    // YouTube keyword search (first result) — experimental
+    document.getElementById('form-youtube-search').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('input-youtube-search');
+      const q = input.value.trim();
+      if (!q) return;
+
+      await searchYoutubeFirstAndEnqueue(q);
+      input.value = '';
+    });
   }
 
   // ─── Player Events ────────────────────────
@@ -467,6 +478,39 @@ const App = (() => {
   }
 
   // ─── Track Management ─────────────────────
+
+  async function searchYoutubeFirstAndEnqueue(query) {
+    const btn = document.getElementById('btn-youtube-search');
+    btn.disabled = true;
+    UI.showToast('Đang tìm trên YouTube…', 'info');
+    try {
+      const response = await fetch(
+        `/api/youtube-search-first?q=${encodeURIComponent(query)}`
+      );
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        UI.showToast(data.error || 'Không tìm được bài', 'error');
+        return;
+      }
+      if (!data.track) {
+        UI.showToast('Không tìm được bài', 'error');
+        return;
+      }
+
+      await SocketClient.emit('queue:add', { track: data.track });
+      UI.showToast(
+        data.track.title
+          ? `Đã thêm: ${data.track.title}`
+          : 'Đã thêm kết quả đầu tiên vào hàng chờ!',
+        'success'
+      );
+    } catch (err) {
+      UI.showToast(err.message || 'Không thể tìm kiếm', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
 
   async function addTrack(url) {
     const isPlaylist = url.includes('youtube.com/playlist') && url.includes('list=');
