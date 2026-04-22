@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 export default function JoinRoomView({ onJoinRoom, initialCode = '' }) {
   const { dispatch } = useApp();
   const [code, setCode] = useState(initialCode);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => localStorage.getItem('jamsc-username') || '');
 
   useEffect(() => {
     if (initialCode) setCode(initialCode);

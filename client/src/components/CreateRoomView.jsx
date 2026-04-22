@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 
 export default function CreateRoomView({ onCreateRoom }) {
   const { dispatch } = useApp();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => localStorage.getItem('jamsc-username') || '');
 
   async function handleSubmit(e) {
     e.preventDefault();

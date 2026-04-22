@@ -186,6 +186,7 @@ export default function RoomView({ socket }) {
     if (!window.confirm('Bạn có chắc muốn rời phòng?')) return;
     const s = socket.getSocket();
     if (s) { s.emit('room:leave'); s.disconnect(); setTimeout(() => s.connect(), 500); }
+    localStorage.removeItem('jamsc-session');
     player.pause();
     setCurrentTrack(null);
     loadedTrackIdRef.current = null;
