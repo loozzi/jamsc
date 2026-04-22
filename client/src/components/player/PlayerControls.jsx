@@ -11,6 +11,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
   const scrubLastXRef = useRef(0);
 
   const canSkip = isHost || room?.settings?.allowSkip;
+  const canSeek = isHost || room?.settings?.allowSeek;
   const { currentTime, duration } = progress;
   const fillPct = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
 
@@ -23,7 +24,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
   }, []);
 
   const handleBarPointerDown = useCallback((e) => {
-    if (!isHost) return;
+    if (!canSeek) return;
     if (e.button !== 0) return;
     if (!state.queue.tracks.length) return;
     e.preventDefault();
@@ -31,7 +32,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
     scrubLastXRef.current = e.clientX;
     barRef.current?.classList.add('is-scrubbing');
     try { barRef.current?.setPointerCapture(e.pointerId); } catch (_) {}
-  }, [isHost, state.queue.tracks.length]);
+  }, [canSeek, state.queue.tracks.length]);
 
   const handleBarPointerMove = useCallback((e) => {
     if (scrubPtrRef.current === null || e.pointerId !== scrubPtrRef.current) return;
@@ -62,7 +63,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
         <span className="time-current">{formatTime(currentTime)}</span>
         <div
           ref={barRef}
-          className={`progress-bar${!isHost ? ' disabled' : ''}`}
+          className={`progress-bar${!canSeek ? ' disabled' : ''}`}
           onPointerDown={handleBarPointerDown}
           onPointerMove={handleBarPointerMove}
           onPointerUp={handleBarPointerUp}

@@ -582,8 +582,9 @@ io.on('connection', (socket) => {
     if (!roomCode) return callback?.({ success: false, error: 'Không trong phòng nào' });
 
     const room = roomManager.getRoom(roomCode);
-    if (room.hostId !== socket.id) {
-      return callback?.({ success: false, error: 'Chỉ host' });
+    const isHost = room.hostId === socket.id;
+    if (!isHost && !room.settings.allowSeek) {
+      return callback?.({ success: false, error: 'Chỉ host mới có quyền tua' });
     }
 
     const t = Number(time);

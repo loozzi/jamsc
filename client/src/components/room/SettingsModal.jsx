@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 export default function SettingsModal({ onClose, onUpdateSetting }) {
   const { state } = useApp();
   const allowSkip = state.room?.settings?.allowSkip ?? false;
+  const allowSeek = state.room?.settings?.allowSeek ?? false;
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -27,6 +28,20 @@ export default function SettingsModal({ onClose, onUpdateSetting }) {
                 type="checkbox"
                 checked={allowSkip}
                 onChange={(e) => onUpdateSetting({ allowSkip: e.target.checked })}
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+          <div className="setting-item">
+            <div className="setting-info">
+              <h4>Cho phép thành viên tua</h4>
+              <p>Thành viên có thể kéo thanh tiến trình</p>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={allowSeek}
+                onChange={(e) => onUpdateSetting({ allowSeek: e.target.checked })}
               />
               <span className="toggle-slider" />
             </label>
