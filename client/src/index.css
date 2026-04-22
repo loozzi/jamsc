@@ -518,6 +518,9 @@ body {
 .player-resize-handle:hover { color: var(--accent-cyan); }
 .player-resize-handle svg { pointer-events: none; }
 body.player-resize-active { user-select: none; cursor: nwse-resize !important; }
+body.is-seeking { user-select: none; }
+body.is-seeking #youtube-player-container iframe,
+body.is-seeking #youtube-player-container > div { pointer-events: none; }
 
 .btn-player-expand {
   position: absolute;

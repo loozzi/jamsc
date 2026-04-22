@@ -31,6 +31,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
     scrubPtrRef.current = e.pointerId;
     scrubLastXRef.current = e.clientX;
     barRef.current?.classList.add('is-scrubbing');
+    document.body.classList.add('is-seeking');
     try { barRef.current?.setPointerCapture(e.pointerId); } catch (_) {}
   }, [canSeek, state.queue.tracks.length]);
 
@@ -48,6 +49,7 @@ export default function PlayerControls({ player, onTogglePlay, onNext, onSeek })
     const pid = scrubPtrRef.current;
     scrubPtrRef.current = null;
     barRef.current?.classList.remove('is-scrubbing');
+    document.body.classList.remove('is-seeking');
     try { barRef.current?.releasePointerCapture(pid); } catch (_) {}
 
     if (duration > 0) {
