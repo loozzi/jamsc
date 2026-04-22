@@ -1,1 +1,16 @@
 node_modules/
+server/node_modules/
+client/node_modules/
+
+# Vite build output (rebuilt on deploy)
+public/assets/
+public/index.html
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editor
+.DS_Store
+*.log
