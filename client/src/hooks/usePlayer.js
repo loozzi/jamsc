@@ -194,6 +194,7 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
           yt.loadVideoById({ videoId: track.sourceId, startSeconds: 0 });
           setTimeout(() => {
             yt.pauseVideo?.();
+            yt.setVolume?.(volumeRef.current);
             isExternalUpdateRef.current = false;
             resolve();
           }, 800);
@@ -213,6 +214,7 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
             color: '#7b2ff7',
             callback: () => {
               isExternalUpdateRef.current = false;
+              sc.setVolume?.(volumeRef.current);
               sc.getDuration((d) => {
                 durationRef.current = (d || 0) / 1000;
                 setProgress((p) => ({ ...p, duration: durationRef.current }));
