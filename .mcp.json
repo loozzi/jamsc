@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "serena": {
+            "type": "stdio",
+            "command": "serena",
+            "args": [
+                "start-mcp-server",
+                "--context=vscode"
+            ]
+        }
+    }
+}
