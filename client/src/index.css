@@ -96,8 +96,44 @@ body {
   background: var(--bg);
 }
 #view-create, #view-join {
-  display: flex; align-items: center; justify-content: center;
-  padding: var(--space-xl); background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px; background: var(--bg);
+}
+.join-card {
+  width: 100%; max-width: 420px;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 20px; padding: 32px 28px;
+  box-shadow: var(--shadow-card);
+  animation: fadeIn 0.3s ease both;
+}
+.join-wrapper {
+  width: 100%; max-width: 420px; display: flex; flex-direction: column;
+}
+.join-back-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 13px; font-family: var(--font);
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 0; margin-bottom: 12px; align-self: flex-start;
+}
+.join-back-btn:hover { color: var(--text); }
+.join-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--primary); margin-bottom: 8px;
+}
+.join-title { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 6px; }
+.join-sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+.join-hint-box {
+  background: var(--s2); border-radius: 12px; padding: 14px 16px;
+  border: 1px solid var(--border); margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.join-hint-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--s3), var(--s4));
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.join-hint-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-left: auto; flex-shrink: 0;
 }
 #view-room {
   display: flex; flex-direction: column; min-height: 100vh;
@@ -163,6 +199,16 @@ body {
   cursor: pointer; transition: all 0.15s;
 }
 .btn-back:hover { background: var(--s2); color: var(--text); border-color: var(--primary); }
+
+/* ─── Field (standalone input) ─── */
+.field {
+  width: 100%; padding: 14px 18px; background: var(--s2);
+  border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); font-family: var(--font); font-size: 1rem;
+  transition: border-color 0.15s; outline: none; display: block;
+}
+.field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,215,96,0.12); }
+.field::placeholder { color: var(--dim); }
 
 /* ─── Inputs ─── */
 .input-group { margin-bottom: var(--space-lg); }
