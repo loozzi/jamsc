@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import PlayerContainer from '../player/PlayerContainer';
 import Avatar from '../Avatar';
@@ -11,6 +11,7 @@ export default function NowPlayingTab({
 }) {
   const { state } = useApp();
   const { room, queue, isHost } = state;
+  const canSeek = isHost || (room?.settings?.allowSeek ?? false);
   const members = room?.members ?? [];
   const { tracks, currentIndex } = queue;
   const { isPlaying, progress } = player;
@@ -19,7 +20,9 @@ export default function NowPlayingTab({
   const uiDuration = duration > 0 ? duration : (currentTrack?.duration || 0);
   const fillPct = uiDuration > 0 ? Math.min((currentTime / uiDuration) * 100, 100) : 0;
   const upNext = tracks.filter((_, i) => i > currentIndex).slice(0, 3);
-  const isYT = currentTrack?.source === 'youtube';
+  const displaySrc = currentTrack?.displaySource || currentTrack?.source;
+  const isYT = currentTrack?.source === 'youtube' && displaySrc !== 'spotify';
+  const isSP = displaySrc === 'spotify';
 
   const [floaters, setFloaters] = useState([]);
 
@@ -65,8 +68,8 @@ export default function NowPlayingTab({
 
             {/* Platform badge */}
             {currentTrack && (
-              <div className="tv-platform-badge" style={{ color: isYT ? '#ff4444' : '#ff7700' }}>
-                {isYT ? 'YT' : 'SC'}
+              <div className="tv-platform-badge" style={{ color: isSP ? '#1db954' : isYT ? '#ff4444' : '#ff7700' }}>
+                {isSP ? 'Spotify' : isYT ? 'YT' : 'SC'}
               </div>
             )}
 
@@ -83,9 +86,14 @@ export default function NowPlayingTab({
           </div>
 
           {/* Green progress bar flush under TV */}
-          <div className="tv-progress">
-            <div className="tv-progress-fill" style={{ width: `${fillPct}%` }} />
-          </div>
+          <SeekBar
+            fillPct={fillPct}
+            duration={uiDuration}
+            onSeek={onSeek}
+            canSeek={canSeek}
+            className="tv-progress"
+            fillClass="tv-progress-fill"
+          />
         </div>
 
         {/* ── Couch Row ── */}
@@ -143,9 +151,14 @@ export default function NowPlayingTab({
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(uiDuration)}</span>
           </div>
-          <div className="np-progress-visual" aria-hidden="true">
-            <div className="np-progress-visual-fill" style={{ width: `${fillPct}%` }} />
-          </div>
+          <SeekBar
+            fillPct={fillPct}
+            duration={uiDuration}
+            onSeek={onSeek}
+            canSeek={canSeek}
+            className="np-progress-visual"
+            fillClass="np-progress-visual-fill"
+          />
         </div>
       ) : (
         <div className="np-track np-control-bar" style={{ textAlign: 'center', color: 'var(--dim)' }}>
@@ -177,6 +190,57 @@ export default function NowPlayingTab({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SeekBar({ fillPct, duration, onSeek, canSeek, className, fillClass }) {
+  const barRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const calcTime = useCallback((clientX) => {
+    const bar = barRef.current;
+    if (!bar || !duration) return null;
+    const { left, width } = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - left) / width)) * duration;
+  }, [duration]);
+
+  function handleClick(e) {
+    if (!canSeek || draggingRef.current) return;
+    const t = calcTime(e.clientX);
+    if (t !== null) onSeek(t);
+  }
+
+  function handlePointerDown(e) {
+    if (!canSeek || !duration) return;
+    barRef.current?.setPointerCapture(e.pointerId);
+    draggingRef.current = true;
+  }
+
+  function handlePointerMove(e) {
+    if (!draggingRef.current) return;
+    const t = calcTime(e.clientX);
+    if (t !== null) onSeek(t);
+  }
+
+  function handlePointerUp(e) {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    try { barRef.current?.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
+
+  return (
+    <div
+      ref={barRef}
+      className={className}
+      onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{ cursor: canSeek && duration ? 'pointer' : 'default' }}
+    >
+      <div className={fillClass} style={{ width: `${fillPct}%` }} />
     </div>
   );
 }
@@ -219,7 +283,9 @@ function UpvoteBtn({ votes, voted }) {
 }
 
 function QueueItemCompact({ track, onClick }) {
-  const isYT = track.source === 'youtube';
+  const displaySrc = track.displaySource || track.source;
+  const isYT = track.source === 'youtube' && displaySrc !== 'spotify';
+  const isSP = displaySrc === 'spotify';
   return (
     <div className="qi-row" onClick={onClick} style={{ cursor: 'pointer' }}>
       <div className="qi-thumb">
@@ -227,8 +293,8 @@ function QueueItemCompact({ track, onClick }) {
           ? <img src={track.thumbnail} alt="" />
           : <span>♪</span>
         }
-        <div className="platform-badge" style={{ color: isYT ? '#ff4444' : '#ff7700' }}>
-          {isYT ? 'YT' : 'SC'}
+        <div className="platform-badge" style={{ color: isSP ? '#1db954' : isYT ? '#ff4444' : '#ff7700' }}>
+          {isSP ? 'SP' : isYT ? 'YT' : 'SC'}
         </div>
       </div>
       <div className="qi-info">

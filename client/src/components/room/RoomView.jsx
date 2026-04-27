@@ -166,6 +166,17 @@ export default function RoomView({ socket }) {
   }
 
   async function handleAddTrack(url) {
+    const isSpotify = url.includes('open.spotify.com/track/');
+    if (isSpotify) {
+      showToast('Đang tìm bài từ Spotify…', 'info');
+      const res = await fetch(`/api/resolve-spotify?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (data.error) { showToast(data.error, 'error'); return; }
+      await socket.emit('queue:add', { track: data });
+      showToast(`Đã thêm: ${data.title}`, 'success');
+      return;
+    }
+
     const isPlaylist = url.includes('youtube.com/playlist') && url.includes('list=');
     if (isPlaylist) {
       showToast('Đang tải playlist...', 'info');

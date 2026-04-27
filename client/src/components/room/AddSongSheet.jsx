@@ -43,7 +43,7 @@ export default function AddSongSheet({ onClose, onAddTrack, onYoutubeSearch }) {
       <div className="sheet" onClick={e => e.stopPropagation()}>
         <div className="sheet-handle" />
         <h3 className="sheet-title">Thêm Bài Hát</h3>
-        <p className="sheet-sub">Dán link YouTube, playlist YouTube, hoặc SoundCloud</p>
+        <p className="sheet-sub">Dán link YouTube, playlist YouTube, SoundCloud hoặc Spotify</p>
 
         {/* URL input */}
         <form onSubmit={handleUrlSubmit}>
@@ -52,7 +52,7 @@ export default function AddSongSheet({ onClose, onAddTrack, onYoutubeSearch }) {
             <input
               value={url}
               onChange={e => setUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=…"
+              placeholder="YouTube, SoundCloud hoặc Spotify…"
               autoFocus
             />
             {addingUrl && <div className="spinner" />}
@@ -68,7 +68,7 @@ export default function AddSongSheet({ onClose, onAddTrack, onYoutubeSearch }) {
           <div style={{ marginBottom: 16 }}>
             <div className="sheet-section-label">Nền tảng hỗ trợ</div>
             <div className="sheet-platforms">
-              {[['▶', 'YouTube', '#ff4444'], ['☁', 'SoundCloud', '#ff7700']].map(([icon, name, c]) => (
+              {[['▶', 'YouTube', '#ff4444'], ['☁', 'SoundCloud', '#ff7700'], ['♫', 'Spotify', '#1db954']].map(([icon, name, c]) => (
                 <div key={name} className="sheet-platform-chip">
                   <span style={{ fontSize: 14, color: c }}>{icon}</span>
                   <span className="sheet-platform-label">{name}</span>

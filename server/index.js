@@ -70,6 +70,63 @@ app.get('/api/resolve', async (req, res) => {
 });
 
 /**
+ * Resolve a Spotify track URL: fetch metadata via oEmbed, then find a playable YouTube video.
+ * Returns a track with source='youtube' for playback but displaySource='spotify' for UI.
+ */
+app.get('/api/resolve-spotify', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'URL là bắt buộc' });
+
+  if (!url.includes('open.spotify.com/track/')) {
+    return res.status(400).json({ error: 'Chỉ hỗ trợ link track Spotify (open.spotify.com/track/...)' });
+  }
+
+  const spotifyUrl = url.split('?')[0];
+
+  let title = '';
+  let artist = '';
+  let thumbnail = '';
+  try {
+    const oembed = await fetchJson(
+      `https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`
+    );
+    title = oembed.title || '';
+    artist = oembed.author_name || '';
+    thumbnail = oembed.thumbnail_url || '';
+  } catch (e) {
+    console.warn('[Spotify] oEmbed failed:', e.message);
+    return res.status(400).json({ error: 'Không thể lấy thông tin từ Spotify. Hãy kiểm tra link.' });
+  }
+
+  if (!title) {
+    return res.status(400).json({ error: 'Không đọc được tên bài từ Spotify.' });
+  }
+
+  try {
+    const searchQuery = artist ? `${title} ${artist}` : title;
+    const ytTrack = await youtubeSearch.searchYouTubeFirstVideo(searchQuery);
+    if (!ytTrack?.sourceId) {
+      return res.status(404).json({ error: 'Không tìm được video YouTube cho bài này.' });
+    }
+
+    res.json({
+      source: 'youtube',
+      displaySource: 'spotify',
+      sourceId: ytTrack.sourceId,
+      url: `https://www.youtube.com/watch?v=${ytTrack.sourceId}`,
+      spotifyUrl,
+      title,
+      artist,
+      thumbnail,
+      duration: 0,
+    });
+  } catch (err) {
+    console.error('[Spotify] YouTube search error:', err);
+    res.status(500).json({ error: 'Không thể tìm YouTube cho bài này.' });
+  }
+});
+
+/**
  * YouTube keyword search — first result (scrape, no Data API). Experimental.
  */
 app.get('/api/youtube-search-first', async (req, res) => {

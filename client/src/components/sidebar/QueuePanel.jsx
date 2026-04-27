@@ -81,7 +81,9 @@ function QueueItemRow({ track, isActive, isHost, onSkipTo, onRemove, draggable, 
   const [votes, setVotes] = useState(0);
   const [voted, setVoted] = useState(false);
   const [bouncing, setBouncing] = useState(false);
-  const isYT = track.source === 'youtube';
+  const displaySrc = track.displaySource || track.source;
+  const isYT = track.source === 'youtube' && displaySrc !== 'spotify';
+  const isSP = displaySrc === 'spotify';
 
   function handleUpvote(e) {
     e.stopPropagation();
@@ -119,15 +121,15 @@ function QueueItemRow({ track, isActive, isHost, onSkipTo, onRemove, draggable, 
           ? <img src={track.thumbnail} alt="" loading="lazy" />
           : <span style={{ color: 'var(--dim)', fontSize: 18 }}>{isActive ? '▶' : '♪'}</span>
         }
-        <div className="platform-badge" style={{ color: isActive ? 'var(--primary)' : 'var(--muted)' }}>
-          {isYT ? 'YT' : 'SC'}
+        <div className="platform-badge" style={{ color: isSP ? '#1db954' : isYT ? (isActive ? 'var(--primary)' : 'var(--muted)') : (isActive ? 'var(--primary)' : 'var(--muted)') }}>
+          {isSP ? 'SP' : isYT ? 'YT' : 'SC'}
         </div>
       </div>
 
       <div className="queue-item-info">
         <div className="queue-item-title">{track.title || 'Loading...'}</div>
         <div className="queue-item-meta">
-          <span className={`queue-item-source${isYT ? '' : ' sc'}`}>{isYT ? 'YT' : 'SC'}</span>
+          <span className={`queue-item-source${isSP ? ' sp' : isYT ? '' : ' sc'}`}>{isSP ? 'Spotify' : isYT ? 'YT' : 'SC'}</span>
           {track.duration > 0 && <span>{formatTime(track.duration)}</span>}
         </div>
         {track.addedBy && (
