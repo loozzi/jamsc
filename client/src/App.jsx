@@ -111,6 +111,9 @@ export default function App() {
         saveSession(code, memberName);
         dispatch({ type: 'SET_ROOM', room: res.room });
         if (res.queue) dispatch({ type: 'SET_QUEUE', queue: res.queue });
+        if (res.playback?.currentTrack) {
+          dispatch({ type: 'SET_PENDING_PLAYBACK', playback: { ...res.playback, _receivedAt: Date.now() } });
+        }
         history.pushState(null, '', '?room=' + res.room.id);
         dispatch({ type: 'SET_VIEW', view: 'room' });
         showToast(`Đã tham gia phòng ${code}!`, 'success');

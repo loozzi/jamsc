@@ -9,6 +9,7 @@ const initialState = {
   mySocketId: null,
   queue: { tracks: [], currentIndex: -1 },
   playback: { isPlaying: false, currentTime: 0, currentTrack: null },
+  pendingPlayback: null, // playback state received on join, applied once RoomView mounts
   chatMessages: [],
   toasts: [],
   connected: false,
@@ -121,6 +122,9 @@ function reducer(state, action) {
 
     case 'SET_PLAYBACK':
       return { ...state, playback: { ...state.playback, ...action.playback } };
+
+    case 'SET_PENDING_PLAYBACK':
+      return { ...state, pendingPlayback: action.playback };
 
     case 'ADD_CHAT_MESSAGE':
       return { ...state, chatMessages: [...state.chatMessages, action.message] };

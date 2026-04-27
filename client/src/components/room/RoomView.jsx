@@ -77,6 +77,14 @@ export default function RoomView({ socket }) {
     }
   }, [player, queue.tracks, dispatch]);
 
+  // Apply playback state received from server on join
+  useEffect(() => {
+    const pending = state.pendingPlayback;
+    if (!pending?.currentTrack) return;
+    dispatch({ type: 'SET_PENDING_PLAYBACK', playback: null });
+    applyPlaybackState(pending);
+  }, [state.pendingPlayback]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const media = window.matchMedia('(min-width: 1024px)');
