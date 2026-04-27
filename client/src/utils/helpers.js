@@ -17,8 +17,8 @@ export function formatDuration(seconds) {
 }
 
 const AVATAR_COLORS = [
-  '#00f5d4', '#7b2ff7', '#f72585', '#4361ee',
-  '#f9c74f', '#43aa8b', '#f94144', '#577590',
+  '#535353', '#6a6a6a', '#404040', '#595959',
+  '#4d4d4d', '#616161', '#484848', '#5e5e5e',
 ];
 
 export function getAvatarColor(name) {

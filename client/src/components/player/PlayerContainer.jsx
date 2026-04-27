@@ -9,19 +9,45 @@ export default function PlayerContainer({ player, currentTrack }) {
   const scIframeRef = useRef(null);
   const ytDivRef = useRef(null);
 
-  const [ytInited, setYtInited] = useState(false);
-  const [scInited, setScInited] = useState(false);
+  const ytInitedRef = useRef(false);
+  const scInitedRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isYoutube = currentTrack?.source === 'youtube';
+  const embedError = player.embedError;
+  const showYoutubeFallback = isYoutube && embedError?.source === 'youtube';
+  const showSoundCloudFallback = currentTrack?.source === 'soundcloud' && embedError?.source === 'soundcloud';
+
+  function getFallbackMessage() {
+    const code = Number(embedError?.code);
+    if (embedError?.source === 'youtube') {
+      if (code === 101 || code === 150) {
+        return 'Video này bị chặn phát nhúng hoặc giới hạn theo tài khoản/khu vực/độ tuổi.';
+      }
+      if (code === 100) {
+        return 'Video đã bị gỡ, để riêng tư hoặc không còn tồn tại.';
+      }
+      if (code === 2) {
+        return 'ID video không hợp lệ hoặc link video không còn dùng được.';
+      }
+      if (code === 5) {
+        return 'Trình phát nhúng không thể tải video này trong trình duyệt hiện tại.';
+      }
+      return 'Video này không thể phát nhúng ngay lúc này.';
+    }
+    if (embedError?.source === 'soundcloud') {
+      return 'Track SoundCloud này không thể phát nhúng ngay lúc này.';
+    }
+    return 'Nội dung này chưa thể phát nhúng.';
+  }
 
   // ─── Init YouTube ─────────────────────────
 
   useEffect(() => {
     function tryInit() {
-      if (window.YT?.Player && ytDivRef.current && !ytInited) {
+      if (window.YT?.Player && ytDivRef.current && !ytInitedRef.current) {
+        ytInitedRef.current = true;
         player.initYouTube('youtube-player');
-        setYtInited(true);
       }
     }
 
@@ -47,9 +73,9 @@ export default function PlayerContainer({ player, currentTrack }) {
 
   useEffect(() => {
     function tryInitSC() {
-      if (window.SC?.Widget && scIframeRef.current && !scInited) {
+      if (window.SC?.Widget && scIframeRef.current && !scInitedRef.current) {
+        scInitedRef.current = true;
         player.initSoundCloud(scIframeRef.current);
-        setScInited(true);
       }
     }
 
@@ -171,8 +197,23 @@ export default function PlayerContainer({ player, currentTrack }) {
         className="player-embed"
         style={{ display: isYoutube || !currentTrack ? 'block' : 'none' }}
       >
-        <div id="youtube-player" ref={ytDivRef} />
-        {currentTrack?.source === 'youtube' && (
+        <div id="youtube-player" ref={ytDivRef} style={{ display: showYoutubeFallback ? 'none' : 'block' }} />
+        {showYoutubeFallback && (
+          <div className="player-fallback">
+            <div className="player-fallback-title">Không thể phát video nhúng</div>
+            <p className="player-fallback-text">{getFallbackMessage()}</p>
+            <a
+              className="player-fallback-link"
+              href={currentTrack?.url || '#'}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => player.clearEmbedError?.()}
+            >
+              Mở trên YouTube
+            </a>
+          </div>
+        )}
+        {currentTrack?.source === 'youtube' && !showYoutubeFallback && (
           <button
             type="button"
             className="btn-player-expand"
@@ -212,8 +253,24 @@ export default function PlayerContainer({ player, currentTrack }) {
           scrolling="no"
           frameBorder="no"
           allow="autoplay"
+          style={{ display: showSoundCloudFallback ? 'none' : 'block' }}
           src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/293&color=%237b2ff7&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false"
         />
+        {showSoundCloudFallback && (
+          <div className="player-fallback player-fallback-soundcloud">
+            <div className="player-fallback-title">Không thể phát track nhúng</div>
+            <p className="player-fallback-text">{getFallbackMessage()}</p>
+            <a
+              className="player-fallback-link"
+              href={currentTrack?.url || '#'}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => player.clearEmbedError?.()}
+            >
+              Mở trên SoundCloud
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Resize handle */}

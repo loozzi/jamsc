@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 
-export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
+export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
   const ytPlayerRef = useRef(null);
   const scWidgetRef = useRef(null);
   const currentSourceRef = useRef(null);
@@ -8,17 +8,22 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
   const progressIntervalRef = useRef(null);
   const durationRef = useRef(0);
   const volumeRef = useRef(70);
+  const ytReadyRef = useRef(false);
+  const scReadyRef = useRef(false);
   const onTrackEndRef = useRef(onTrackEnd);
   const onNextTrackRef = useRef(onNextTrack);
+  const onTrackErrorRef = useRef(onTrackError);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState({ currentTime: 0, duration: 0 });
   const [volume, setVolumeState] = useState(70);
   const [ytReady, setYtReady] = useState(false);
   const [scReady, setScReady] = useState(false);
+  const [embedError, setEmbedError] = useState(null);
 
   useEffect(() => { onTrackEndRef.current = onTrackEnd; }, [onTrackEnd]);
   useEffect(() => { onNextTrackRef.current = onNextTrack; }, [onNextTrack]);
+  useEffect(() => { onTrackErrorRef.current = onTrackError; }, [onTrackError]);
 
   // ─── Media Session ────────────────────────
 
@@ -61,44 +66,90 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
     }
   }, []);
 
-  const getCurrentTimeRaw = useCallback(() => {
+  const waitForBackend = useCallback((source, timeoutMs = 8000) => {
     return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const check = () => {
+        if (source === 'youtube' && ytReadyRef.current && ytPlayerRef.current) {
+          resolve(ytPlayerRef.current);
+          return;
+        }
+        if (source === 'soundcloud' && scReadyRef.current && scWidgetRef.current) {
+          resolve(scWidgetRef.current);
+          return;
+        }
+        if (Date.now() - startedAt >= timeoutMs) {
+          resolve(null);
+          return;
+        }
+        setTimeout(check, 100);
+      };
+      check();
+    });
+  }, []);
+
+  const getCurrentTimeRaw = useCallback(() => {
+    return new Promise(async (resolve) => {
       const src = currentSourceRef.current;
       if (src === 'youtube' && ytPlayerRef.current?.getCurrentTime) {
         resolve(ytPlayerRef.current.getCurrentTime() || 0);
+      } else if (src === 'youtube') {
+        const yt = await waitForBackend('youtube', 1200);
+        resolve(yt?.getCurrentTime?.() || 0);
       } else if (src === 'soundcloud' && scWidgetRef.current) {
         scWidgetRef.current.getPosition((pos) => resolve((pos || 0) / 1000));
+      } else if (src === 'soundcloud') {
+        const sc = await waitForBackend('soundcloud', 1200);
+        if (sc?.getPosition) sc.getPosition((pos) => resolve((pos || 0) / 1000));
+        else resolve(0);
       } else {
         resolve(0);
       }
     });
-  }, []);
+  }, [waitForBackend]);
 
   const getDurationRaw = useCallback(() => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const src = currentSourceRef.current;
       if (src === 'youtube' && ytPlayerRef.current?.getDuration) {
         const d = ytPlayerRef.current.getDuration();
         if (d) { durationRef.current = d; resolve(d); }
         else resolve(durationRef.current);
+      } else if (src === 'youtube') {
+        const yt = await waitForBackend('youtube', 1200);
+        const d = yt?.getDuration?.() || 0;
+        if (d) durationRef.current = d;
+        resolve(durationRef.current);
       } else if (src === 'soundcloud' && scWidgetRef.current) {
         scWidgetRef.current.getDuration((d) => {
           durationRef.current = (d || 0) / 1000;
           resolve(durationRef.current);
         });
+      } else if (src === 'soundcloud') {
+        const sc = await waitForBackend('soundcloud', 1200);
+        if (sc?.getDuration) {
+          sc.getDuration((d) => {
+            durationRef.current = (d || 0) / 1000;
+            resolve(durationRef.current);
+          });
+        } else {
+          resolve(durationRef.current);
+        }
       } else {
         resolve(durationRef.current);
       }
     });
-  }, []);
+  }, [waitForBackend]);
 
   const startProgressTracking = useCallback(() => {
     stopProgressTracking();
-    progressIntervalRef.current = setInterval(async () => {
+    const tick = async () => {
       const time = await getCurrentTimeRaw();
       const dur = await getDurationRaw();
       setProgress({ currentTime: time, duration: dur });
-    }, 500);
+    };
+    tick();
+    progressIntervalRef.current = setInterval(tick, 500);
   }, [stopProgressTracking, getCurrentTimeRaw, getDurationRaw]);
 
   // ─── YouTube Init ─────────────────────────
@@ -122,12 +173,15 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
       events: {
         onReady: () => {
           ytPlayerRef.current.setVolume(volumeRef.current);
+          ytReadyRef.current = true;
           setYtReady(true);
+          setEmbedError(null);
         },
         onStateChange: (event) => {
           if (isExternalUpdateRef.current) return;
           const YT = window.YT;
           if (event.data === YT.PlayerState.PLAYING) {
+            setEmbedError(null);
             setIsPlaying(true);
             startProgressTracking();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -141,8 +195,19 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
             onTrackEndRef.current?.();
           }
         },
-        onError: () => {
-          console.error('[Player] YouTube error');
+        onError: (event) => {
+          const code = event?.data;
+          console.error('[Player] YouTube error', code);
+          setIsPlaying(false);
+          stopProgressTracking();
+          setEmbedError({
+            source: 'youtube',
+            code: typeof code === 'number' ? code : null,
+          });
+          onTrackErrorRef.current?.({
+            source: 'youtube',
+            code: typeof code === 'number' ? code : null,
+          });
         },
       },
     });
@@ -157,10 +222,13 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
 
     widget.bind(window.SC.Widget.Events.READY, () => {
       widget.setVolume(volumeRef.current);
+      scReadyRef.current = true;
       setScReady(true);
+      setEmbedError(null);
     });
     widget.bind(window.SC.Widget.Events.PLAY, () => {
       if (isExternalUpdateRef.current) return;
+      setEmbedError(null);
       setIsPlaying(true);
       startProgressTracking();
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -176,20 +244,32 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
       stopProgressTracking();
       onTrackEndRef.current?.();
     });
+    if (window.SC.Widget.Events.ERROR) {
+      widget.bind(window.SC.Widget.Events.ERROR, () => {
+        setIsPlaying(false);
+        stopProgressTracking();
+        setEmbedError({ source: 'soundcloud', code: null });
+        onTrackErrorRef.current?.({ source: 'soundcloud', code: null });
+      });
+    }
   }, [startProgressTracking, stopProgressTracking]);
 
   // ─── Load Track ───────────────────────────
 
-  const loadTrack = useCallback((track) => {
+  const loadTrack = useCallback(async (track) => {
     stopProgressTracking();
     currentSourceRef.current = track.source;
     durationRef.current = track.duration || 0;
+    setProgress({ currentTime: 0, duration: durationRef.current });
+    setEmbedError(null);
 
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       isExternalUpdateRef.current = true;
 
       if (track.source === 'youtube') {
-        const yt = ytPlayerRef.current;
+        const yt = ytReadyRef.current && ytPlayerRef.current
+          ? ytPlayerRef.current
+          : await waitForBackend('youtube');
         if (yt?.loadVideoById) {
           yt.loadVideoById({ videoId: track.sourceId, startSeconds: 0 });
           setTimeout(() => {
@@ -197,13 +277,15 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
             yt.setVolume?.(volumeRef.current);
             isExternalUpdateRef.current = false;
             resolve();
-          }, 800);
+          }, 400);
         } else {
           isExternalUpdateRef.current = false;
           resolve();
         }
       } else if (track.source === 'soundcloud') {
-        const sc = scWidgetRef.current;
+        const sc = scReadyRef.current && scWidgetRef.current
+          ? scWidgetRef.current
+          : await waitForBackend('soundcloud');
         if (sc) {
           sc.load(track.sourceId, {
             auto_play: false,
@@ -231,39 +313,62 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
         resolve();
       }
     });
-  }, [stopProgressTracking]);
+  }, [stopProgressTracking, waitForBackend]);
 
   // ─── Playback Controls ────────────────────
 
   const play = useCallback(() => {
     isExternalUpdateRef.current = true;
     const src = currentSourceRef.current;
-    if (src === 'youtube') ytPlayerRef.current?.playVideo?.();
-    else if (src === 'soundcloud') scWidgetRef.current?.play?.();
+    if (src === 'youtube') {
+      if (ytPlayerRef.current?.playVideo) {
+        ytPlayerRef.current.playVideo();
+      } else {
+        waitForBackend('youtube').then((yt) => yt?.playVideo?.());
+      }
+    } else if (src === 'soundcloud') {
+      if (scWidgetRef.current?.play) {
+        scWidgetRef.current.play();
+      } else {
+        waitForBackend('soundcloud').then((sc) => sc?.play?.());
+      }
+    }
     setIsPlaying(true);
     startProgressTracking();
     setTimeout(() => { isExternalUpdateRef.current = false; }, 300);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-  }, [startProgressTracking]);
+  }, [startProgressTracking, waitForBackend]);
 
   const pause = useCallback(() => {
     isExternalUpdateRef.current = true;
     const src = currentSourceRef.current;
-    if (src === 'youtube') ytPlayerRef.current?.pauseVideo?.();
-    else if (src === 'soundcloud') scWidgetRef.current?.pause?.();
+    if (src === 'youtube') {
+      if (ytPlayerRef.current?.pauseVideo) ytPlayerRef.current.pauseVideo();
+      else waitForBackend('youtube').then((yt) => yt?.pauseVideo?.());
+    } else if (src === 'soundcloud') {
+      if (scWidgetRef.current?.pause) scWidgetRef.current.pause();
+      else waitForBackend('soundcloud').then((sc) => sc?.pause?.());
+    }
     setIsPlaying(false);
     stopProgressTracking();
     setTimeout(() => { isExternalUpdateRef.current = false; }, 300);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-  }, [stopProgressTracking]);
+  }, [stopProgressTracking, waitForBackend]);
 
   const seekTo = useCallback((seconds) => {
     isExternalUpdateRef.current = true;
     const src = currentSourceRef.current;
-    if (src === 'youtube') ytPlayerRef.current?.seekTo?.(seconds, true);
-    else if (src === 'soundcloud') scWidgetRef.current?.seekTo?.(seconds * 1000);
+    const t = Math.max(0, Number(seconds) || 0);
+    if (src === 'youtube') {
+      if (ytPlayerRef.current?.seekTo) ytPlayerRef.current.seekTo(t, true);
+      else waitForBackend('youtube').then((yt) => yt?.seekTo?.(t, true));
+    } else if (src === 'soundcloud') {
+      if (scWidgetRef.current?.seekTo) scWidgetRef.current.seekTo(t * 1000);
+      else waitForBackend('soundcloud').then((sc) => sc?.seekTo?.(t * 1000));
+    }
+    setProgress((p) => ({ ...p, currentTime: t }));
     setTimeout(() => { isExternalUpdateRef.current = false; }, 300);
-  }, []);
+  }, [waitForBackend]);
 
   const setVolume = useCallback((val) => {
     volumeRef.current = val;
@@ -287,6 +392,7 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
   }, []);
 
   const getCurrentSource = useCallback(() => currentSourceRef.current, []);
+  const clearEmbedError = useCallback(() => setEmbedError(null), []);
 
   return {
     initYouTube,
@@ -306,6 +412,8 @@ export function usePlayer({ onTrackEnd, onNextTrack } = {}) {
     volume,
     ytReady,
     scReady,
+    embedError,
+    clearEmbedError,
     ytPlayerRef,
     scWidgetRef,
   };

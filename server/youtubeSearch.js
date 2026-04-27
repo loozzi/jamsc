@@ -5,6 +5,8 @@
 
 const MAX_QUERY_LEN = 200;
 const FETCH_TIMEOUT_MS = 12000;
+const VERIFY_TIMEOUT_MS = 8000;
+const MAX_CANDIDATES = 8;
 
 const BROWSER_HEADERS = {
   'User-Agent':
@@ -41,17 +43,23 @@ function buildTrackFromVideoRenderer(vr) {
 }
 
 /**
- * Breadth-first walk: first videoRenderer in tree order (roughly matches first result slot).
+ * Breadth-first walk: collect top videoRenderer in tree order.
  */
-function findFirstVideoRenderer(root) {
+function findVideoRenderers(root, limit = MAX_CANDIDATES) {
   const queue = [root];
+  const found = [];
+  const seen = new Set();
   let iters = 0;
-  while (queue.length > 0 && iters++ < 200000) {
+  while (queue.length > 0 && iters++ < 200000 && found.length < limit) {
     const node = queue.shift();
     if (!node || typeof node !== 'object') continue;
 
     if (node.videoRenderer?.videoId) {
-      return node.videoRenderer;
+      const id = node.videoRenderer.videoId;
+      if (!seen.has(id)) {
+        seen.add(id);
+        found.push(node.videoRenderer);
+      }
     }
 
     if (Array.isArray(node)) {
@@ -63,7 +71,7 @@ function findFirstVideoRenderer(root) {
       if (val && typeof val === 'object') queue.push(val);
     }
   }
-  return null;
+  return found;
 }
 
 function extractYtInitialDataJson(html) {
@@ -80,21 +88,25 @@ function extractYtInitialDataJson(html) {
   }
 }
 
-/** Regex fallback: first 11-char videoId in page (may be wrong if ads embed ids first). */
-function fallbackFirstVideoId(html) {
+/** Regex fallback: collect 11-char videoIds in page (may include non-organic results). */
+function fallbackVideoIds(html, limit = MAX_CANDIDATES) {
+  const ids = [];
+  const seen = new Set();
   const regex = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
   let m;
-  while ((m = regex.exec(html)) !== null) {
+  while ((m = regex.exec(html)) !== null && ids.length < limit) {
     const id = m[1];
-    if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+    if (/^[a-zA-Z0-9_-]{11}$/.test(id) && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
   }
-  return null;
+  return ids;
 }
 
-async function fetchSearchHtml(query) {
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+async function fetchTextWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       headers: BROWSER_HEADERS,
@@ -105,6 +117,40 @@ async function fetchSearchHtml(query) {
   } finally {
     clearTimeout(t);
   }
+}
+
+async function fetchSearchHtml(query) {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  return fetchTextWithTimeout(url, FETCH_TIMEOUT_MS);
+}
+
+/**
+ * Verify if video can be played in embedded context.
+ * This checks common playability flags from watch page payload.
+ */
+async function isEmbeddableVideo(videoId) {
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}&hl=en`;
+  const html = await fetchTextWithTimeout(watchUrl, VERIFY_TIMEOUT_MS);
+  if (!html) return false;
+
+  if (html.includes('"playableInEmbed":false')) return false;
+
+  // Common restricted statuses in player response
+  if (
+    html.includes('"status":"LOGIN_REQUIRED"') ||
+    html.includes('"status":"AGE_CHECK_REQUIRED"') ||
+    html.includes('"status":"UNPLAYABLE"') ||
+    html.includes('"status":"ERROR"')
+  ) {
+    return false;
+  }
+
+  // Require at least one positive signal to avoid weak false positives
+  if (html.includes('"playableInEmbed":true') || html.includes('"status":"OK"')) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -120,26 +166,40 @@ async function searchYouTubeFirstVideo(rawQuery) {
   const html = await fetchSearchHtml(query);
   if (!html) return null;
 
+  const candidateTracks = [];
+  const seen = new Set();
+  const pushTrack = (track) => {
+    if (!track || !track.sourceId || seen.has(track.sourceId) || candidateTracks.length >= MAX_CANDIDATES) return;
+    seen.add(track.sourceId);
+    candidateTracks.push(track);
+  };
+
   const ytData = extractYtInitialDataJson(html);
   if (ytData) {
-    const vr = findFirstVideoRenderer(ytData);
-    if (vr) {
+    const renderers = findVideoRenderers(ytData, MAX_CANDIDATES);
+    for (const vr of renderers) {
       const track = buildTrackFromVideoRenderer(vr);
-      if (track) return track;
+      pushTrack(track);
     }
   }
 
-  const vid = fallbackFirstVideoId(html);
-  if (!vid) return null;
+  for (const vid of fallbackVideoIds(html, MAX_CANDIDATES)) {
+    pushTrack({
+      source: 'youtube',
+      sourceId: vid,
+      url: `https://www.youtube.com/watch?v=${vid}`,
+      title: '',
+      thumbnail: `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
+      duration: 0,
+    });
+  }
 
-  return {
-    source: 'youtube',
-    sourceId: vid,
-    url: `https://www.youtube.com/watch?v=${vid}`,
-    title: '',
-    thumbnail: `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-    duration: 0,
-  };
+  for (const track of candidateTracks) {
+    const ok = await isEmbeddableVideo(track.sourceId);
+    if (ok) return track;
+  }
+
+  return null;
 }
 
 module.exports = {
