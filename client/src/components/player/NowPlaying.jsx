@@ -22,13 +22,18 @@ export default function NowPlaying({ isPlaying, currentTrack }) {
     <div className="now-playing glass-card">
       <div className="now-playing-info">
         <div className="now-playing-artwork">
-          {track.thumbnail && <img src={track.thumbnail} alt="Album art" />}
+          {track.thumbnail
+            ? <img src={track.thumbnail} alt="Album art" />
+            : <div className="player-art-pulse" />
+          }
           <div className={`playing-indicator${isPlaying ? ' active' : ''}`}>
             <span /><span /><span /><span />
           </div>
         </div>
         <div className="now-playing-details">
-          <div className="now-playing-source">{isYoutube ? 'YouTube' : 'SoundCloud'}</div>
+          <div className={`now-playing-source${isYoutube ? '' : ' soundcloud'}`}>
+            {isYoutube ? 'YouTube' : 'SoundCloud'}
+          </div>
           <h3 className="now-playing-title">{track.title || 'Loading...'}</h3>
           <p className="now-playing-added">Thêm bởi {track.addedBy || 'Unknown'}</p>
         </div>

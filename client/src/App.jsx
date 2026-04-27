@@ -7,6 +7,7 @@ import LandingView from './components/LandingView';
 import CreateRoomView from './components/CreateRoomView';
 import JoinRoomView from './components/JoinRoomView';
 import RoomView from './components/room/RoomView';
+import CreateShareView from './components/CreateShareView';
 
 const NAME_KEY = 'jamsc-username';
 const SESSION_KEY = 'jamsc-session';
@@ -94,7 +95,7 @@ export default function App() {
         dispatch({ type: 'SET_ROOM', room: res.room });
         dispatch({ type: 'SET_QUEUE', queue: { tracks: [], currentIndex: -1 } });
         history.pushState(null, '', '?room=' + res.room.id);
-        dispatch({ type: 'SET_VIEW', view: 'room' });
+        dispatch({ type: 'SET_VIEW', view: 'create-share' });
         showToast(`Phòng ${res.room.id} đã được tạo!`, 'success');
       }
     } catch (err) {
@@ -126,6 +127,7 @@ export default function App() {
 
       {view === 'landing' && <LandingView />}
       {view === 'create' && <CreateRoomView onCreateRoom={handleCreateRoom} />}
+      {view === 'create-share' && <CreateShareView onEnterRoom={() => dispatch({ type: 'SET_VIEW', view: 'room' })} />}
       {view === 'join' && <JoinRoomView onJoinRoom={handleJoinRoom} initialCode={initialRoomCode} />}
       {view === 'room' && <RoomView socket={socket} />}
     </>

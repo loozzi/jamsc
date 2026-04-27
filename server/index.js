@@ -81,17 +81,21 @@ app.get('/api/youtube-search-first', async (req, res) => {
   try {
     const track = await youtubeSearch.searchYouTubeFirstVideo(q);
     if (!track) {
-      return res.status(404).json({ error: 'Không tìm thấy video phù hợp. Thử từ khóa khác.' });
+      return res.status(404).json({
+        error: 'Không tìm thấy video có thể phát nhúng (có thể do chặn nhúng/giới hạn tuổi-khu vực). Thử từ khóa khác.',
+      });
     }
-    if (!track.title && track.url) {
+    if (track.url) {
       try {
         const enriched = await resolveUrl(track.url);
-        if (enriched) {
-          if (enriched.title) track.title = enriched.title;
-          if (enriched.thumbnail) track.thumbnail = enriched.thumbnail;
+        if (!enriched || !enriched.sourceId) {
+          return res.status(404).json({ error: 'Không tìm được video hợp lệ từ kết quả tìm kiếm.' });
         }
+        track.sourceId = enriched.sourceId;
+        if (enriched.title) track.title = enriched.title;
+        if (enriched.thumbnail) track.thumbnail = enriched.thumbnail;
       } catch (_) {
-        /* keep scrape-only metadata */
+        return res.status(500).json({ error: 'Không thể xác minh video YouTube lúc này.' });
       }
     }
     res.json({ track });
@@ -113,43 +117,65 @@ async function fetchJson(url) {
 /**
  * Parse and resolve music URL, fetching metadata via oEmbed APIs
  */
-async function resolveUrl(url) {
-  // YouTube patterns
-  const ytPatterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
-  ];
+function extractYouTubeVideoId(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
 
-  for (const pattern of ytPatterns) {
-    const match = url.match(pattern);
-    if (match) {
-      const videoId = match[1];
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-      // Fetch metadata via YouTube oEmbed API (free, no API key needed)
-      let title = '';
-      let thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-      try {
-        const oembed = await fetchJson(
-          `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
-        );
-        title = oembed.title || '';
-        if (oembed.thumbnail_url) {
-          thumbnail = oembed.thumbnail_url;
-        }
-      } catch (e) {
-        console.warn('[Resolve] YouTube oEmbed failed, using fallback:', e.message);
-      }
-
-      return {
-        source: 'youtube',
-        sourceId: videoId,
-        url: videoUrl,
-        title,
-        thumbnail,
-        duration: 0,
-      };
+    if (host === 'youtu.be' || host === 'www.youtu.be') {
+      const id = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
     }
+
+    if (host.includes('youtube.com') || host.includes('youtube-nocookie.com')) {
+      // /watch?v=VIDEO_ID
+      const v = parsed.searchParams.get('v');
+      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+
+      // /shorts/VIDEO_ID, /embed/VIDEO_ID, /live/VIDEO_ID
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      const markerIdx = parts.findIndex((p) => p === 'shorts' || p === 'embed' || p === 'live');
+      if (markerIdx !== -1) {
+        const id = parts[markerIdx + 1];
+        if (id && /^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+      }
+    }
+  } catch (_) {
+    // Fallback to regex path below
+  }
+
+  return null;
+}
+
+async function resolveUrl(url) {
+  // YouTube
+  const videoId = extractYouTubeVideoId(url);
+  if (videoId) {
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Fetch metadata via YouTube oEmbed API (free, no API key needed)
+    let title = '';
+    let thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    try {
+      const oembed = await fetchJson(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
+      );
+      title = oembed.title || '';
+      if (oembed.thumbnail_url) {
+        thumbnail = oembed.thumbnail_url;
+      }
+    } catch (e) {
+      console.warn('[Resolve] YouTube oEmbed failed, using fallback:', e.message);
+    }
+
+    return {
+      source: 'youtube',
+      sourceId: videoId,
+      url: videoUrl,
+      title,
+      thumbnail,
+      duration: 0,
+    };
   }
 
   // SoundCloud patterns
