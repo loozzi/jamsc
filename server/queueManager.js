@@ -37,6 +37,8 @@ function addToQueue(roomCode, track) {
     addedBySocketId: track.addedBySocketId || '',
     sourceId: track.sourceId || '',
     addedAt: new Date(),
+    votes: 0,
+    votedBy: new Set(),
   };
 
   q.queue.push(queueItem);
@@ -160,6 +162,45 @@ function skipToTrack(roomCode, trackId) {
 }
 
 /**
+ * Toggle upvote for a track (one vote per user across queue).
+ * If user upvotes a new track, old upvote is removed automatically.
+ * Re-sorts upcoming tracks by votes desc.
+ * Returns { voted, votes } or null if track not found.
+ */
+function upvoteTrack(roomCode, trackId, socketId) {
+  const q = queues.get(roomCode);
+  if (!q) return null;
+
+  const track = q.queue.find((t) => t.id === trackId);
+  if (!track) return null;
+
+  const previousVotedTrack = q.queue.find((t) => t.votedBy?.has(socketId));
+
+  // Toggle off if user clicks the same track again.
+  if (previousVotedTrack && previousVotedTrack.id === trackId) {
+    track.votedBy.delete(socketId);
+    track.votes = Math.max(0, track.votes - 1);
+  } else {
+    // Remove old vote from another track first (enforce 1 vote per user).
+    if (previousVotedTrack) {
+      previousVotedTrack.votedBy.delete(socketId);
+      previousVotedTrack.votes = Math.max(0, previousVotedTrack.votes - 1);
+    }
+    track.votedBy.add(socketId);
+    track.votes++;
+  }
+
+  // Re-sort tracks that haven't played yet (after currentIndex), stable by votes desc
+  const pivot = q.currentIndex + 1;
+  const played = q.queue.slice(0, pivot);
+  const upcoming = q.queue.slice(pivot);
+  upcoming.sort((a, b) => b.votes - a.votes);
+  q.queue = [...played, ...upcoming];
+
+  return { voted: track.votedBy.has(socketId), votes: track.votes };
+}
+
+/**
  * Get the full queue
  */
 function getQueue(roomCode) {
@@ -190,6 +231,7 @@ function serializeQueue(roomCode) {
       source: t.source,
       addedBy: t.addedBy,
       sourceId: t.sourceId,
+      votes: t.votes || 0,
     })),
     currentIndex,
     currentTrack: currentIndex >= 0 ? queue[currentIndex] : null,
@@ -204,6 +246,7 @@ module.exports = {
   nextTrack,
   removeCurrentAndGetNext,
   reorderQueue,
+  upvoteTrack,
   skipToTrack,
   getQueue,
   clearQueue,

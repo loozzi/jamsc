@@ -52,9 +52,31 @@ function VolumeControl({ player }) {
         onChange={handleVolumeChange}
         className="np-volume-slider"
         title={`Âm lượng: ${volume}%`}
+        style={{
+          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${volume}%, var(--s4) ${volume}%, var(--s4) 100%)`,
+        }}
       />
       <span className="np-volume-pct">{volume}%</span>
     </div>
+  );
+}
+
+function YouTubeThumbnailToggle({ player }) {
+  const enabled = Boolean(player.youtubeThumbnailMode);
+  return (
+    <button
+      type="button"
+      className={`ctrl-btn-round secondary np-yt-thumb-btn${enabled ? ' active' : ''}`}
+      onClick={() => player.setYouTubeThumbnailMode?.(!enabled)}
+      title={enabled ? 'Đang bật chế độ tiết kiệm data (chỉ thumbnail)' : 'Bật chế độ tiết kiệm data (chỉ thumbnail)'}
+      aria-label="Chế độ thumbnail YouTube"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="8" cy="10" r="1.6" />
+        <path d="M21 15l-5-4-4 3-3-2-6 5" />
+      </svg>
+    </button>
   );
 }
 
@@ -106,7 +128,7 @@ export default function NowPlayingTab({
                 ? <img src={currentTrack.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: 0.5 }} />
                 : <div className="tv-art-thumb">♪</div>
               }
-              {currentTrack && (
+              {currentTrack && (!isYT || player.youtubeThumbnailMode) && (
                 <div style={{ textAlign: 'center', zIndex: 2, padding: '0 20px' }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{currentTrack.title}</div>
                   <div style={{ fontSize: 12, color: '#aaa', marginTop: 3 }}>{currentTrack.addedBy}</div>
@@ -139,28 +161,30 @@ export default function NowPlayingTab({
             </button>
           </div>
 
-          {/* Green progress bar flush under TV */}
-          <SeekBar
-            fillPct={fillPct}
-            duration={uiDuration}
-            onSeek={onSeek}
-            canSeek={canSeek}
-            className="tv-progress"
-            fillClass="tv-progress-fill"
-          />
         </div>
       </div>
 
       {/* ── Couch Row ── */}
       <div className="couch-row">
-        <div className="couch-avatars">
+        {/* Desktop: named member cards */}
+        <div className="couch-members-desktop">
+          {members.map((m) => (
+            <div key={m.id} className="couch-member-card">
+              <Avatar name={m.name} size="sm" isHost={m.isHost} />
+              <span className="couch-member-name">{m.name}</span>
+              <span className="couch-member-sync" />
+            </div>
+          ))}
+        </div>
+        {/* Mobile: overlapping avatars + info */}
+        <div className="couch-avatars couch-avatars-mobile">
           {members.map((m, i) => (
             <div key={m.id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: members.length - i }}>
               <Avatar name={m.name} size="sm" isHost={m.isHost} />
             </div>
           ))}
         </div>
-        <div className="couch-info">
+        <div className="couch-info couch-info-mobile">
           <div className="couch-title">{members.length} đang xem cùng nhau</div>
           <div className="couch-stats">
             <span className="couch-stat">
@@ -192,11 +216,12 @@ export default function NowPlayingTab({
             </div>
             <div className="np-track-actions">
               <div className="np-controls np-controls-inline">
+                <VolumeControl player={player} />
+                {isYT && <YouTubeThumbnailToggle player={player} />}
                 <CtrlBtn icon="⏮" size={34} onClick={() => {}} />
                 <CtrlBtn icon={isPlaying ? '⏸' : '▶'} size={46} primary onClick={onTogglePlay} />
                 <CtrlBtn icon="⏭" size={34} onClick={onNext} />
               </div>
-              <UpvoteBtn votes={0} voted={false} />
             </div>
           </div>
 
@@ -213,7 +238,6 @@ export default function NowPlayingTab({
             className="np-progress-visual"
             fillClass="np-progress-visual-fill"
           />
-          <VolumeControl player={player} />
         </div>
       ) : (
         <div className="np-track np-control-bar" style={{ textAlign: 'center', color: 'var(--dim)' }}>
@@ -308,31 +332,6 @@ function CtrlBtn({ icon, size, primary, onClick }) {
       style={{ width: size, height: size, fontSize: size > 44 ? 22 : 16 }}
     >
       {icon}
-    </button>
-  );
-}
-
-function UpvoteBtn({ votes, voted }) {
-  const [localVotes, setLocalVotes] = useState(votes);
-  const [localVoted, setLocalVoted] = useState(voted);
-  const [bouncing, setBouncing] = useState(false);
-
-  function handleVote(e) {
-    e.stopPropagation();
-    if (localVoted) { setLocalVotes(v => v - 1); setLocalVoted(false); return; }
-    setLocalVotes(v => v + 1); setLocalVoted(true);
-    setBouncing(true);
-    setTimeout(() => setBouncing(false), 400);
-  }
-
-  return (
-    <button
-      onClick={handleVote}
-      className={`qi-upvote${localVoted ? ' voted' : ''}${bouncing ? ' bouncing' : ''}`}
-      style={{ padding: '10px 14px' }}
-    >
-      <span className="qi-upvote-arrow">▲</span>
-      <span className="qi-upvote-count">{localVotes}</span>
     </button>
   );
 }

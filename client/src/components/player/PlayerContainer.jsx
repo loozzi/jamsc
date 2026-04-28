@@ -14,6 +14,7 @@ export default function PlayerContainer({ player, currentTrack }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isYoutube = currentTrack?.source === 'youtube';
+  const youtubeThumbnailMode = Boolean(player.youtubeThumbnailMode);
   const embedError = player.embedError;
   const showYoutubeFallback = isYoutube && embedError?.source === 'youtube';
   const showSoundCloudFallback = currentTrack?.source === 'soundcloud' && embedError?.source === 'soundcloud';
@@ -189,7 +190,7 @@ export default function PlayerContainer({ player, currentTrack }) {
   }, []);
 
   return (
-    <div ref={wrapperRef} className="player-wrapper">
+    <div ref={wrapperRef} className={`player-wrapper${isYoutube && youtubeThumbnailMode ? ' yt-thumbnail-mode' : ''}`}>
       {/* YouTube */}
       <div
         ref={ytContainerRef}
@@ -197,7 +198,19 @@ export default function PlayerContainer({ player, currentTrack }) {
         className="player-embed"
         style={{ display: isYoutube || !currentTrack ? 'block' : 'none' }}
       >
-        <div id="youtube-player" ref={ytDivRef} style={{ display: showYoutubeFallback ? 'none' : 'block' }} />
+        <div
+          id="youtube-player"
+          ref={ytDivRef}
+          style={{
+            display: showYoutubeFallback ? 'none' : 'block',
+            pointerEvents: isYoutube && youtubeThumbnailMode ? 'none' : 'auto',
+            position: isYoutube && youtubeThumbnailMode ? 'absolute' : 'static',
+            width: isYoutube && youtubeThumbnailMode ? '1px' : '100%',
+            height: isYoutube && youtubeThumbnailMode ? '1px' : '100%',
+            left: isYoutube && youtubeThumbnailMode ? '-10000px' : '0',
+            top: isYoutube && youtubeThumbnailMode ? '-10000px' : '0',
+          }}
+        />
         {showYoutubeFallback && (
           <div className="player-fallback">
             <div className="player-fallback-title">Không thể phát video nhúng</div>
@@ -213,7 +226,7 @@ export default function PlayerContainer({ player, currentTrack }) {
             </a>
           </div>
         )}
-        {currentTrack?.source === 'youtube' && !showYoutubeFallback && (
+        {currentTrack?.source === 'youtube' && !showYoutubeFallback && !youtubeThumbnailMode && (
           <button
             type="button"
             className="btn-player-expand"
@@ -274,20 +287,22 @@ export default function PlayerContainer({ player, currentTrack }) {
       </div>
 
       {/* Resize handle */}
-      <div
-        ref={resizeHandleRef}
-        className="player-resize-handle"
-        id="player-resize-handle"
-        role="separator"
-        aria-label="Kéo để chỉnh kích thước"
-        title="Kéo để chỉnh kích thước vùng phát"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <line x1="9" y1="15" x2="15" y2="9" />
-          <line x1="5" y1="19" x2="19" y2="5" />
-          <line x1="13" y1="19" x2="19" y2="13" />
-        </svg>
-      </div>
+      {!(isYoutube && youtubeThumbnailMode) && (
+        <div
+          ref={resizeHandleRef}
+          className="player-resize-handle"
+          id="player-resize-handle"
+          role="separator"
+          aria-label="Kéo để chỉnh kích thước"
+          title="Kéo để chỉnh kích thước vùng phát"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <line x1="9" y1="15" x2="15" y2="9" />
+            <line x1="5" y1="19" x2="19" y2="5" />
+            <line x1="13" y1="19" x2="19" y2="13" />
+          </svg>
+        </div>
+      )}
     </div>
   );
 }
