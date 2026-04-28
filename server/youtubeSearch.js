@@ -5,13 +5,15 @@
 
 const MAX_QUERY_LEN = 200;
 const FETCH_TIMEOUT_MS = 12000;
-const VERIFY_TIMEOUT_MS = 8000;
+const OEMBED_TIMEOUT_MS = 5000;
 const MAX_CANDIDATES = 8;
 
 const BROWSER_HEADERS = {
   'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
 };
 
 function buildTrackFromVideoRenderer(vr) {
@@ -114,6 +116,8 @@ async function fetchTextWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
     });
     if (!response.ok) return null;
     return await response.text();
+  } catch {
+    return null;
   } finally {
     clearTimeout(t);
   }
@@ -125,32 +129,23 @@ async function fetchSearchHtml(query) {
 }
 
 /**
- * Verify if video can be played in embedded context.
- * This checks common playability flags from watch page payload.
+ * Verify if a video is embeddable using the YouTube oEmbed API.
+ * Returns 401 for private/non-embeddable/age-restricted videos.
+ * More reliable than scraping the watch page.
  */
 async function isEmbeddableVideo(videoId) {
-  const watchUrl = `https://www.youtube.com/watch?v=${videoId}&hl=en`;
-  const html = await fetchTextWithTimeout(watchUrl, VERIFY_TIMEOUT_MS);
-  if (!html) return false;
-
-  if (html.includes('"playableInEmbed":false')) return false;
-
-  // Common restricted statuses in player response
-  if (
-    html.includes('"status":"LOGIN_REQUIRED"') ||
-    html.includes('"status":"AGE_CHECK_REQUIRED"') ||
-    html.includes('"status":"UNPLAYABLE"') ||
-    html.includes('"status":"ERROR"')
-  ) {
-    return false;
-  }
-
-  // Require at least one positive signal to avoid weak false positives
-  if (html.includes('"playableInEmbed":true') || html.includes('"status":"OK"')) {
+  const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), OEMBED_TIMEOUT_MS);
+  try {
+    const response = await fetch(oembedUrl, { signal: controller.signal });
+    return response.ok; // 200 = embeddable, 401/403 = not embeddable
+  } catch {
+    // Network error or timeout — assume embeddable to avoid false negatives
     return true;
+  } finally {
+    clearTimeout(t);
   }
-
-  return false;
 }
 
 /**
@@ -194,12 +189,16 @@ async function searchYouTubeFirstVideo(rawQuery) {
     });
   }
 
+  if (candidateTracks.length === 0) return null;
+
+  // Check each candidate via oEmbed; fall back to first candidate if all fail
   for (const track of candidateTracks) {
     const ok = await isEmbeddableVideo(track.sourceId);
     if (ok) return track;
   }
 
-  return null;
+  // If all oEmbed checks failed (e.g., network issues), return the first candidate anyway
+  return candidateTracks[0];
 }
 
 module.exports = {

@@ -2407,7 +2407,22 @@ body.is-seeking #youtube-player-container>div {
 .tv-embed {
   position: absolute;
   inset: 0;
-  z-index: 5;
+}
+
+.tv-embed .player-wrapper {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+
+.tv-embed .player-embed {
+  height: 100%;
+  aspect-ratio: unset;
+}
+
+.tv-embed .player-resize-handle {
+  display: none;
 }
 
 .tv-overlay-play {
@@ -2501,6 +2516,7 @@ body.is-seeking #youtube-player-container>div {
 .couch-info {
   flex: 1;
   min-width: 0;
+  height: 32px;
 }
 
 .couch-title {

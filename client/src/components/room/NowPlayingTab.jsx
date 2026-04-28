@@ -149,32 +149,32 @@ export default function NowPlayingTab({
             fillClass="tv-progress-fill"
           />
         </div>
+      </div>
 
-        {/* ── Couch Row ── */}
-        <div className="couch-row">
-          <div className="couch-avatars">
-            {members.map((m, i) => (
-              <div key={m.id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: members.length - i }}>
-                <Avatar name={m.name} size="sm" isHost={m.isHost} />
-              </div>
-            ))}
-          </div>
-          <div className="couch-info">
-            <div className="couch-title">{members.length} đang xem cùng nhau</div>
-            <div className="couch-stats">
-              <span className="couch-stat">
-                <span className="couch-dot" style={{ background: '#22c55e' }} />
-                <span style={{ color: '#22c55e' }}>{members.length} synced</span>
-              </span>
+      {/* ── Couch Row ── */}
+      <div className="couch-row">
+        <div className="couch-avatars">
+          {members.map((m, i) => (
+            <div key={m.id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: members.length - i }}>
+              <Avatar name={m.name} size="sm" isHost={m.isHost} />
             </div>
+          ))}
+        </div>
+        <div className="couch-info">
+          <div className="couch-title">{members.length} đang xem cùng nhau</div>
+          <div className="couch-stats">
+            <span className="couch-stat">
+              <span className="couch-dot" style={{ background: '#22c55e' }} />
+              <span style={{ color: '#22c55e' }}>{members.length} synced</span>
+            </span>
           </div>
-          <div className="couch-emojis">
-            {EMOJIS.map(e => (
-              <button key={e} className="couch-emoji-btn" onClick={() => react(e)} aria-label={e}>
-                {e}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="couch-emojis">
+          {EMOJIS.map(e => (
+            <button key={e} className="couch-emoji-btn" onClick={() => react(e)} aria-label={e}>
+              {e}
+            </button>
+          ))}
         </div>
       </div>
 

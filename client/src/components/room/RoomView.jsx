@@ -212,7 +212,7 @@ export default function RoomView({ socket }) {
   }
 
   async function handleTogglePlay() {
-    const track = queue.tracks[queue.currentIndex];
+    const track = currentTrack ?? queue.tracks[queue.currentIndex];
     if (!track) { showToast('Chưa có bài nào trong hàng chờ', 'info'); return; }
     if (isHost) {
       if (player.isPlaying) {
