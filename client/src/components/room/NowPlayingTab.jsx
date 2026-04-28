@@ -4,6 +4,60 @@ import PlayerContainer from '../player/PlayerContainer';
 import Avatar from '../Avatar';
 import { formatTime } from '../../utils/helpers';
 
+function VolumeControl({ player }) {
+  const { volume, setVolume } = player;
+  const prevVolRef = useRef(volume > 0 ? volume : 70);
+
+  function handleVolumeChange(e) {
+    const val = parseInt(e.target.value);
+    if (val > 0) prevVolRef.current = val;
+    setVolume(val);
+  }
+
+  function toggleMute() {
+    if (volume > 0) {
+      prevVolRef.current = volume;
+      setVolume(0);
+    } else {
+      setVolume(prevVolRef.current || 70);
+    }
+  }
+
+  return (
+    <div className="np-volume-control">
+      <button className="ctrl-btn-round secondary np-volume-btn" onClick={toggleMute} title="Âm lượng">
+        {volume === 0 ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
+          </svg>
+        ) : volume < 50 ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 010 7.07" />
+          </svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
+          </svg>
+        )}
+      </button>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={volume}
+        onChange={handleVolumeChange}
+        className="np-volume-slider"
+        title={`Âm lượng: ${volume}%`}
+      />
+      <span className="np-volume-pct">{volume}%</span>
+    </div>
+  );
+}
+
 const EMOJIS = ['🔥', '❤️', '😭', '🎶'];
 
 export default function NowPlayingTab({
@@ -159,6 +213,7 @@ export default function NowPlayingTab({
             className="np-progress-visual"
             fillClass="np-progress-visual-fill"
           />
+          <VolumeControl player={player} />
         </div>
       ) : (
         <div className="np-track np-control-bar" style={{ textAlign: 'center', color: 'var(--dim)' }}>
