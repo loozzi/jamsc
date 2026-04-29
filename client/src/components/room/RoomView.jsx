@@ -11,7 +11,6 @@ import ChatPanel from '../sidebar/ChatPanel';
 
 const TABS = [
   { id: 'playing', icon: '▶', label: 'Watching' },
-  { id: 'queue',   icon: '≡', label: 'Queue'    },
   { id: 'chat',    icon: '💬', label: 'Chat'     },
   { id: 'people',  icon: '●', label: 'People'   },
 ];
@@ -256,6 +255,9 @@ export default function RoomView({ socket }) {
   async function handleReorder(trackIds) {
     try { await socket.emit('queue:reorder', { trackIds }); } catch (err) { showToast(err.message, 'error'); }
   }
+  async function handleUpvote(trackId) {
+    try { await socket.emit('queue:upvote', { trackId }); } catch (_) {}
+  }
   async function handleUpdateSetting(settings) {
     try { await socket.emit('room:update-settings', { settings }); } catch (err) { showToast(err.message, 'error'); }
   }
@@ -285,16 +287,17 @@ export default function RoomView({ socket }) {
                 showUpNext={false}
               />
             </div>
+          </div>
+          <aside className="room-desktop-side">
             <div className="room-desktop-queue">
               <QueuePanel
                 onSkipTo={handleSkipTo}
                 onRemove={handleRemoveTrack}
                 onReorder={handleReorder}
                 onAddSong={() => setShowAddSong(true)}
+                onUpvote={handleUpvote}
               />
             </div>
-          </div>
-          <aside className="room-desktop-side">
             <ChatPanel onSendMessage={handleSendMessage} />
           </aside>
         </div>
@@ -302,30 +305,30 @@ export default function RoomView({ socket }) {
         <div className="room-tab-content room-mobile-content">
           {/* NowPlayingTab always mounted — keeps YT/SC player alive across tab switches */}
           <div className={`tab-panel${activeTab !== 'playing' ? ' hidden' : ''}`}>
-            <NowPlayingTab
-              player={player}
-              currentTrack={currentTrack}
-              onTogglePlay={handleTogglePlay}
-              onNext={handleNext}
-              onSeek={handleSeek}
-              onSkipTo={handleSkipTo}
-              onOpenAddSong={() => setShowAddSong(true)}
-              showUpNext
-            />
-          </div>
-
-          {activeTab === 'queue' && (
-            <div className="tab-panel">
-              <div style={{ padding: 12 }}>
+            <div className="mobile-playing-stack">
+              <div className="mobile-playing-main">
+                <NowPlayingTab
+                  player={player}
+                  currentTrack={currentTrack}
+                  onTogglePlay={handleTogglePlay}
+                  onNext={handleNext}
+                  onSeek={handleSeek}
+                  onSkipTo={handleSkipTo}
+                  onOpenAddSong={() => setShowAddSong(true)}
+                  showUpNext={false}
+                />
+              </div>
+              <div className="mobile-playing-queue">
                 <QueuePanel
                   onSkipTo={handleSkipTo}
                   onRemove={handleRemoveTrack}
                   onReorder={handleReorder}
                   onAddSong={() => setShowAddSong(true)}
+                  onUpvote={handleUpvote}
                 />
               </div>
             </div>
-          )}
+          </div>
 
           {activeTab === 'chat' && (
             <div className="tab-panel">
@@ -355,11 +358,6 @@ export default function RoomView({ socket }) {
             </button>
           ))}
         </nav>
-      )}
-
-      {/* FAB */}
-      {!isDesktop && (
-        <button className="room-fab room-mobile-only" onClick={() => setShowAddSong(true)} aria-label="Thêm bài hát">+</button>
       )}
 
       {showAddSong && (

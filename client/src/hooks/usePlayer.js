@@ -1,5 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 
+const YT_THUMBNAIL_MODE_KEY = 'jamsc-yt-thumbnail-mode';
+
 export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
   const ytPlayerRef = useRef(null);
   const scWidgetRef = useRef(null);
@@ -20,6 +22,9 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
   const [ytReady, setYtReady] = useState(false);
   const [scReady, setScReady] = useState(false);
   const [embedError, setEmbedError] = useState(null);
+  const [youtubeThumbnailMode, setYoutubeThumbnailMode] = useState(() => {
+    try { return localStorage.getItem(YT_THUMBNAIL_MODE_KEY) === '1'; } catch (_) { return false; }
+  });
 
   useEffect(() => { onTrackEndRef.current = onTrackEnd; }, [onTrackEnd]);
   useEffect(() => { onNextTrackRef.current = onNextTrack; }, [onNextTrack]);
@@ -173,6 +178,9 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
       events: {
         onReady: () => {
           ytPlayerRef.current.setVolume(volumeRef.current);
+          if (youtubeThumbnailMode) {
+            try { ytPlayerRef.current.setPlaybackQuality?.('small'); } catch (_) {}
+          }
           ytReadyRef.current = true;
           setYtReady(true);
           setEmbedError(null);
@@ -211,7 +219,7 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
         },
       },
     });
-  }, [startProgressTracking, stopProgressTracking]);
+  }, [startProgressTracking, stopProgressTracking, youtubeThumbnailMode]);
 
   // ─── SoundCloud Init ──────────────────────
 
@@ -275,6 +283,9 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
           setTimeout(() => {
             yt.pauseVideo?.();
             yt.setVolume?.(volumeRef.current);
+            if (youtubeThumbnailMode) {
+              try { yt.setPlaybackQuality?.('small'); } catch (_) {}
+            }
             isExternalUpdateRef.current = false;
             resolve();
           }, 400);
@@ -313,7 +324,7 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
         resolve();
       }
     });
-  }, [stopProgressTracking, waitForBackend]);
+  }, [stopProgressTracking, waitForBackend, youtubeThumbnailMode]);
 
   // ─── Playback Controls ────────────────────
 
@@ -377,6 +388,16 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
     scWidgetRef.current?.setVolume?.(val);
   }, []);
 
+  const setYouTubeThumbnailMode = useCallback((enabled) => {
+    const next = Boolean(enabled);
+    setYoutubeThumbnailMode(next);
+    try { localStorage.setItem(YT_THUMBNAIL_MODE_KEY, next ? '1' : '0'); } catch (_) {}
+    const yt = ytPlayerRef.current;
+    if (yt?.setPlaybackQuality) {
+      try { yt.setPlaybackQuality(next ? 'small' : 'auto'); } catch (_) {}
+    }
+  }, []);
+
   const getCurrentTime = useCallback(() => getCurrentTimeRaw(), [getCurrentTimeRaw]);
 
   const getCachedDuration = useCallback(() => durationRef.current, []);
@@ -413,6 +434,8 @@ export function usePlayer({ onTrackEnd, onNextTrack, onTrackError } = {}) {
     ytReady,
     scReady,
     embedError,
+    youtubeThumbnailMode,
+    setYouTubeThumbnailMode,
     clearEmbedError,
     ytPlayerRef,
     scWidgetRef,

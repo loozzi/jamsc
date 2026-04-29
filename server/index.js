@@ -578,6 +578,21 @@ io.on('connection', (socket) => {
   });
 
   /**
+   * Upvote a track — re-sorts upcoming queue by votes desc
+   */
+  socket.on('queue:upvote', ({ trackId }, callback) => {
+    const roomCode = roomManager.getRoomBySocket(socket.id);
+    if (!roomCode) return callback?.({ success: false, error: 'Không trong phòng nào' });
+
+    const result = queueManager.upvoteTrack(roomCode, trackId, socket.id);
+    if (!result) return callback?.({ success: false, error: 'Không tìm thấy bài hát' });
+
+    const queue = queueManager.serializeQueue(roomCode);
+    io.to(roomCode).emit('queue:reordered', { queue });
+    callback?.({ success: true, voted: result.voted, votes: result.votes });
+  });
+
+  /**
    * Remove a track from the queue
    */
   socket.on('queue:remove', ({ trackId }, callback) => {
@@ -610,6 +625,13 @@ io.on('connection', (socket) => {
     const room = roomManager.getRoom(roomCode);
     if (room.hostId !== socket.id) {
       return callback({ success: false, error: 'Chỉ host mới có quyền chuyển bài' });
+    }
+
+    // Remove the currently playing track before jumping
+    const currentTrack = queueManager.getCurrentTrack(roomCode);
+    if (currentTrack && currentTrack.id !== trackId) {
+      queueManager.removeFromQueue(roomCode, currentTrack.id);
+      io.to(roomCode).emit('queue:track-removed', { trackId: currentTrack.id });
     }
 
     const track = queueManager.skipToTrack(roomCode, trackId);
