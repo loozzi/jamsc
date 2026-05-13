@@ -8,6 +8,8 @@ interface QueueEntry {
 
 const queues = new Map<string, QueueEntry>();
 
+// nextTrack() from the original queueManager is omitted — all advancement uses removeCurrentAndGetNext
+
 export function initQueue(roomCode: string): void {
   if (!queues.has(roomCode)) {
     queues.set(roomCode, { queue: [], currentIndex: -1 });

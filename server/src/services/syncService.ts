@@ -10,6 +10,8 @@ interface PlaybackEntry {
 
 const playbackStates = new Map<string, PlaybackEntry>();
 
+// getHeartbeat from the original syncManager is intentionally omitted — callers use getPlaybackState directly
+
 export function initPlayback(roomCode: string): void {
   if (!playbackStates.has(roomCode)) {
     playbackStates.set(roomCode, {
